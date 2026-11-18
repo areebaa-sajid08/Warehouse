@@ -16,6 +16,8 @@ npm run dev
 
 The API runs at `http://localhost:3000`.
 
+For the Vite frontend, copy `Frontend/.env.example` to `Frontend/.env` and set `VITE_API_URL` to the backend deployment URL. Set `FRONTEND_URL` in the backend deployment environment to the exact deployed frontend origin so browser requests pass CORS.
+
 ## Authentication
 
 Send login responses with:

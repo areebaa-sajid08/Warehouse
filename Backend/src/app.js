@@ -6,7 +6,11 @@ import apiRoutes from "./routes/api.routes.js";
 
 const app = express();
 app.use(cors({
-  origin: (origin, cb) => cb(null, !origin || /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)),
+  origin: (origin, cb) => {
+    const localOrigin = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin || "");
+    const configuredOrigin = process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL;
+    cb(null, !origin || localOrigin || configuredOrigin);
+  },
   credentials: true
 }));
 app.use(express.json({ limit: "2mb" }));
