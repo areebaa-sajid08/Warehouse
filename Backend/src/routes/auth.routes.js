@@ -13,10 +13,19 @@ router.post("/register", async (req, res) => {
     if (!name || !email || !password) return res.status(400).json({ message: "Name, email and password are required" });
     if (!publicRoles.includes(role)) return res.status(403).json({ message: "Public registration cannot create this role" });
     if (await User.exists({ email: email.toLowerCase() })) return res.status(409).json({ message: "Email already registered" });
+    if (!process.env.JWT_SECRET) {
+      console.error("Registration failed: JWT_SECRET is not configured");
+      return res.status(500).json({ message: "Authentication is not configured on the server" });
+    }
     const user = await User.create({ name, email, password: await bcrypt.hash(password, 12), phone, role });
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
     res.status(201).json({ message: "Registered successfully", token, user: await User.findById(user._id) });
-  } catch (error) { res.status(400).json({ message: error.message }); }
+  } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ message: "Email already registered" });
+    if (error.name === "ValidationError") return res.status(400).json({ message: error.message });
+    console.error("Registration failed:", error.message);
+    res.status(500).json({ message: "Unable to create the account right now" });
+  }
 });
 
 router.post("/login", async (req, res) => {

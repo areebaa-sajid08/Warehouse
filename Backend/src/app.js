@@ -3,6 +3,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import authRoutes from "./routes/auth.routes.js";
 import apiRoutes from "./routes/api.routes.js";
+import connectDB from "./db/db.js";
 
 const app = express();
 app.use(cors({
@@ -16,6 +17,15 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error("Database connection failed:", error.message);
+    res.status(503).json({ message: "Database unavailable. Check the backend MongoDB configuration and network access." });
+  }
+});
 app.use("/api/auth", authRoutes);
 app.use("/api", apiRoutes);
 app.use((error, req, res, next) => {
