@@ -185,8 +185,8 @@ td small { display: block; margin-top: 4px; color: #a1aab7; font-size: 9px; }
 .empty-state strong { color: #536077; font-size: 11px; }
 .empty-icon { width: 36px; height: 36px; display: grid; place-items: center; margin-bottom: 4px; border-radius: 10px; background: #f2f4ff; color: #697be0; font-size: 18px; }
 .loading-state { padding: 30px; display: flex; align-items: center; justify-content: center; gap: 9px; color: #8793a6; font-size: 11px; }
-.spinner { width: 15px; height: 15px; border: 2px solid #dfe5fb; border-top-color: #526be1; border-radius: 50%; animation: spin .7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.loading-logo { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 9px; font-size: 15px; animation: logo-breathe 1s ease-in-out infinite alternate; }
+@keyframes logo-breathe { from { opacity: .68; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
 
 .auth-page { min-height: 100vh; display: grid; grid-template-columns: minmax(400px, .92fr) 1.08fr; background: #fff; }
 .auth-decoration { min-height: 100vh; position: relative; overflow: hidden; display: flex; align-items: flex-end; padding: 68px clamp(35px, 7vw, 105px); color: #fff; background: radial-gradient(ellipse at 70% 22%, #4765bb 0, transparent 37%), linear-gradient(145deg, #182a4a, #17243b 72%); }
