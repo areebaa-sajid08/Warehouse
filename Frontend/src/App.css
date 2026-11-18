@@ -135,6 +135,14 @@ td small { display: block; margin-top: 4px; color: #a1aab7; font-size: 9px; }
 .mono { font-family: 'DM Sans', sans-serif; font-variant-numeric: tabular-nums; letter-spacing: .1px; }
 .table-product { display: flex; align-items: center; gap: 9px; min-width: 150px; }
 .table-product .product-placeholder { width: 30px; height: 30px; flex-basis: 30px; }
+.product-thumbnail { width: 34px; height: 34px; flex: 0 0 34px; object-fit: cover; border-radius: 8px; background: #f0f3ff; }
+.optional-label { display: inline !important; color: #a4adba !important; font-size: 9px !important; font-weight: 400; margin-left: 4px !important; }
+.upload-hint { color: #9aa5b4; font-size: 9px; font-weight: 400; margin-top: -2px; }
+.file-input { padding: 8px !important; height: auto !important; font-size: 10px !important; cursor: pointer; }
+.file-input::file-selector-button { border: 0; border-radius: 5px; background: #eef1ff; color: #4c62cf; padding: 6px 9px; margin-right: 9px; font-size: 9px; font-weight: 700; cursor: pointer; }
+.image-preview { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid #e8ecf3; border-radius: 8px; background: #fbfcfe; }
+.image-preview img { width: 42px; height: 42px; object-fit: cover; border-radius: 6px; background: #f0f3ff; }
+.image-preview span { overflow: hidden; flex: 1; color: #707d91; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .warehouse-symbol { width: 30px; height: 30px; flex: 0 0 30px; display: grid; place-items: center; color: #6277dc; background: #f0f2ff; border-radius: 8px; font-size: 14px; }
 .stock-state { display: inline-flex; align-items: center; gap: 6px; font-size: 9px; font-weight: 600; white-space: nowrap; }
 .stock-state i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
