@@ -50,9 +50,8 @@ export function Modal({ title, onClose, children }) {
 }
 
 export function LoadingState({ label = "Loading data" }) {
-  return <div className="loading-state" role="status" aria-live="polite">
+  return <div className="loading-state" role="status" aria-live="polite" aria-label={label}>
     <span className="brand-mark loading-logo" aria-hidden="true">W</span>
-    <span>{label}…</span>
   </div>;
 }
 
