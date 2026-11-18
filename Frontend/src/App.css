@@ -11,6 +11,7 @@
   --red: #d85e5e;
   --shadow: 0 8px 26px rgba(29, 42, 67, .045);
 }
+/* umra */
 
 #root { min-height: 100vh; }
 .app-shell { min-height: 100vh; display: flex; background: var(--canvas); }

@@ -41,12 +41,21 @@ router.post("/users", authorize("admin"), async (req, res) => {
   if (imageError) return res.status(400).json({ message: imageError });
   try {
     const { name, email, password, phone = "", role, assignedWarehouses = [], image = "", imageFileId = "" } = req.body;
-    if (!name || !email || !password || !role) return res.status(400).json({ message: "Name, email, password and role are required" });
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    if (!name?.trim() || !normalizedEmail || !password || !role) return res.status(400).json({ message: "Name, email, password and role are required" });
     if (!["admin", "warehouseManager", "supplier", "salesRepresentative"].includes(role)) return res.status(400).json({ message: "Invalid role" });
-    if (await User.exists({ email: email.toLowerCase() })) return res.status(409).json({ message: "Email already registered" });
-    const user = await User.create({ name, email, password: await bcrypt.hash(password, 12), phone, role, assignedWarehouses, image, imageFileId });
+    if (await User.exists({ email: normalizedEmail })) return res.status(409).json({ message: "Email already registered" });
+    const user = await User.create({ username: normalizedEmail, name, email: normalizedEmail, password: await bcrypt.hash(password, 12), phone, role, assignedWarehouses, image, imageFileId });
     res.status(201).json({ user: await User.findById(user._id).populate("assignedWarehouses") });
-  } catch (error) { res.status(400).json({ message: error.message }); }
+  } catch (error) {
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern || {})[0];
+      return res.status(409).json({ message: field === "email" ? "Email already registered" : "Account identifier already in use" });
+    }
+    if (error.name === "ValidationError") return res.status(400).json({ message: error.message });
+    console.error("User creation failed:", error.message);
+    res.status(500).json({ message: "Unable to create the account right now" });
+  }
 });
 router.put("/users/me", async (req, res) => {
   const imageError = validateUserImage(req.body);

@@ -9,19 +9,23 @@ const publicRoles = ["warehouseManager", "supplier", "salesRepresentative"];
 
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password, phone = "", role = "salesRepresentative" } = req.body;
-    if (!name || !email || !password) return res.status(400).json({ message: "Name, email and password are required" });
+    const { name, password, phone = "", role = "salesRepresentative" } = req.body;
+    const email = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    if (!name?.trim() || !email || !password) return res.status(400).json({ message: "Name, email and password are required" });
     if (!publicRoles.includes(role)) return res.status(403).json({ message: "Public registration cannot create this role" });
-    if (await User.exists({ email: email.toLowerCase() })) return res.status(409).json({ message: "Email already registered" });
+    if (await User.exists({ email })) return res.status(409).json({ message: "Email already registered" });
     if (!process.env.JWT_SECRET) {
       console.error("Registration failed: JWT_SECRET is not configured");
       return res.status(500).json({ message: "Authentication is not configured on the server" });
     }
-    const user = await User.create({ name, email, password: await bcrypt.hash(password, 12), phone, role });
+    const user = await User.create({ username: email, name, email, password: await bcrypt.hash(password, 12), phone, role });
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
     res.status(201).json({ message: "Registered successfully", token, user: await User.findById(user._id) });
   } catch (error) {
-    if (error.code === 11000) return res.status(409).json({ message: "Email already registered" });
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern || {})[0];
+      return res.status(409).json({ message: field === "email" ? "Email already registered" : "Account identifier already in use" });
+    }
     if (error.name === "ValidationError") return res.status(400).json({ message: error.message });
     console.error("Registration failed:", error.message);
     res.status(500).json({ message: "Unable to create the account right now" });
@@ -31,7 +35,8 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email: email?.toLowerCase() }).select("+password");
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    const user = await User.findOne({ email: normalizedEmail }).select("+password");
     if (!user || !(await bcrypt.compare(password || "", user.password))) return res.status(401).json({ message: "Invalid email or password" });
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
     user.password = undefined;
