@@ -8,7 +8,7 @@ Node.js, Express, MongoDB/Mongoose, JWT, bcrypt, and ImageKit backend for the in
 2. Set `MONGODB_URI`, `JWT_SECRET`, and the ImageKit credentials.
 3. Install dependencies and start the backend:
 
-```powershell
+```command prompt
 cd Backend
 npm install
 npm run dev
