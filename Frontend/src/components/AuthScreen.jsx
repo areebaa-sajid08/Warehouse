@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { API_URL, apiRequest } from "../lib/api.js";
-import { Button, Field, Notice, SelectField } from "./UI.jsx";
+import { apiRequest } from "../lib/api.js";
+import { showError } from "../lib/alerts.js";
+import { Button, Field, SelectField } from "./UI.jsx";
+import WarehouseScene from "./WarehouseScene.jsx";
 
 export default function AuthScreen({ onAuthenticated }) {
   const [mode, setMode] = useState("login");
@@ -21,20 +23,39 @@ export default function AuthScreen({ onAuthenticated }) {
           : { name: form.name, email: form.email, password: form.password, role: form.role },
       });
       onAuthenticated({ token: result.token, user: result.user });
-    } catch (err) { setError(err.message); }
-    finally { setBusy(false); }
+    } catch (err) {
+      setError(err.message);
+      await showError(err.message);
+    } finally { setBusy(false); }
   };
 
-  return <main className="auth-page">
-    <div className="auth-decoration"><div className="auth-orbit orbit-one" /><div className="auth-orbit orbit-two" /><div className="auth-decoration-copy"><span className="auth-kicker">OPERATIONS, IN SYNC</span><h2>Know your stock.<br />Move with confidence.</h2><p>One calm, connected workspace for your inventory and warehouse operations.</p><div className="auth-mini-card"><span className="mini-chart"><i /><i /><i /><i /><i /><i /><i /></span><span><b>Inventory health</b><small>Everything in its right place</small></span><strong>↗</strong></div></div></div>
-    <div className="auth-main">
-      <a className="brand auth-brand" href="#"><span className="brand-mark">W</span><span className="brand-copy"><strong>Wareflow</strong><small>INVENTORY PLATFORM</small></span></a>
-      <div className="auth-form-wrap">
-        <div className="eyebrow">WELCOME TO WAREFLOW</div>
-        <h1>{mode === "login" ? "Good to see you." : "Create your account."}</h1>
-        <p className="auth-subtitle">{mode === "login" ? "Enter your details to access your workspace." : "Join your team and get your workspace set up."}</p>
-        <Notice message={error} />
-        <form className="form-stack" onSubmit={submit}>
+  return <main className="grid min-h-screen bg-[#fbfaf5] lg:grid-cols-[.96fr_1.04fr]">
+    <div className="relative flex min-h-[310px] flex-col overflow-hidden bg-[#171e18] px-5 py-5 text-white sm:px-8 lg:min-h-screen lg:px-12 lg:py-7">
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(0deg,transparent_95%,#ffffff0a_96%),linear-gradient(90deg,transparent_95%,#ffffff0a_96%)] bg-[size:48px_48px] opacity-40" />
+      <a className="relative z-10 mb-3 flex items-center gap-3 lg:mb-0" href="#">
+        <span className="grid size-10 place-items-center rounded-md bg-[#c9ef6b] text-lg font-extrabold text-[#172019]">W</span>
+        <span className="grid gap-0.5"><strong className="text-base font-bold">Wareflow</strong><small className="text-[8px] font-semibold tracking-[.16em] text-[#a7b09d]">INVENTORY PLATFORM</small></span>
+      </a>
+      <div className="relative z-10 mx-auto grid w-full max-w-3xl flex-1 items-center gap-1 sm:grid-cols-[.8fr_1.2fr] lg:my-auto">
+        <div className="py-2">
+          <span className="text-[8px] font-bold tracking-[.18em] text-[#c9ef6b]">WAREHOUSE OPERATIONS, MADE VISIBLE</span>
+          <h2 className="my-3 text-3xl font-semibold leading-[1.08] tracking-[-.06em] text-[#f7f8f0] sm:text-4xl">Move goods.<br />Not guesswork.</h2>
+          <p className="max-w-xs text-xs leading-relaxed text-[#abb5a7]">From the receiving dock to the final order, keep every item accounted for.</p>
+        </div>
+        <WarehouseScene />
+      </div>
+    </div>
+    <div className="relative flex min-h-[490px] flex-col justify-center px-6 pb-16 pt-8 sm:px-10 lg:min-h-screen lg:px-16 xl:px-28">
+      <div className="absolute left-6 right-6 top-5 flex items-center justify-between gap-3 text-[8px] font-bold tracking-[.12em] text-[#798273] sm:left-10 sm:right-10 lg:left-16 lg:right-16 lg:top-8 xl:left-28 xl:right-28">
+        <span className="flex items-center gap-2">WAREFLOW <i className="size-1 rounded-full bg-[#a0b56d]" /> INVENTORY PLATFORM</span>
+        <span className="text-right text-[#a0a797]">BUILT FOR REAL-WORLD OPERATIONS</span>
+      </div>
+      <div className="mx-auto w-full max-w-md py-10">
+        <div className="mb-2 text-[10px] font-bold tracking-[.18em] text-[#71805f]">{mode === "login" ? "YOUR WORKSPACE IS READY" : "SET UP YOUR ACCESS"}</div>
+        <h1 className="text-4xl font-semibold tracking-[-.06em] text-[#20291f]">{mode === "login" ? "Welcome back." : "Join your team."}</h1>
+        <p className="mb-6 mt-2 text-sm leading-relaxed text-[#788273]">{mode === "login" ? "Enter your details to access your workspace." : "Join your team and get your workspace set up."}</p>
+        {error && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-3 py-2.5 text-xs text-[#9d5144]" role="alert">{error}</div>}
+        <form className="grid gap-4" onSubmit={submit}>
           {mode === "register" && <>
             <Field label="Full name" autoComplete="name" value={form.name} onChange={update("name")} required />
             <SelectField label="Your role" value={form.role} onChange={update("role")} options={[
@@ -45,11 +66,11 @@ export default function AuthScreen({ onAuthenticated }) {
           </>}
           <Field label="Email address" type="email" autoComplete="email" placeholder="you@company.com" value={form.email} onChange={update("email")} required />
           <Field label="Password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="Enter your password" minLength="8" value={form.password} onChange={update("password")} required />
-          <Button type="submit" disabled={busy}>{busy ? "Please wait…" : mode === "login" ? "Sign in to workspace" : "Create account"} <span>→</span></Button>
+          <Button type="submit" disabled={busy} className="w-full justify-between px-4 py-3">{busy ? "Please wait…" : mode === "login" ? "Sign in to workspace" : "Create account"} <span className="text-base text-[#c9ef6b]">→</span></Button>
         </form>
-        <div className="auth-toggle">{mode === "login" ? "New to Wareflow?" : "Already have an account?"} <button onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>{mode === "login" ? "Create an account" : "Sign in"}</button></div>
+        <div className="mt-5 text-center text-xs text-[#788273]">{mode === "login" ? "New to Wareflow?" : "Already have an account?"} <button className="font-bold text-[#526d3e] hover:underline" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}>{mode === "login" ? "Create an account" : "Sign in"}</button></div>
       </div>
-      <div className="auth-footnote"><span><i /> Secure connection</span><span>Connected to {new URL(API_URL).hostname}</span></div>
+      <div className="absolute bottom-4 left-6 right-6 flex justify-between border-t border-[#e6e6db] pt-3 text-[8px] tracking-wide text-[#8d9587] sm:left-10 sm:right-10 lg:left-16 lg:right-16 xl:left-28 xl:right-28"><span className="flex items-center gap-2"><i className="size-1.5 rounded-full bg-[#789477]" /> Secure sign-in</span><span>WAREFLOW · INVENTORY OPERATIONS</span></div>
     </div>
   </main>;
 }

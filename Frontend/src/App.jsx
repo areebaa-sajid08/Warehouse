@@ -5,7 +5,7 @@ import Inventory from "./components/Inventory.jsx";
 import Catalog from "./components/Catalog.jsx";
 import Orders from "./components/Orders.jsx";
 import Supply from "./components/Supply.jsx";
-import "./App.css";
+import { confirmAction } from "./lib/alerts.js";
 
 const navigation = [
   { id: "overview", label: "Overview", section: "Workspace", roles: ["admin", "warehouseManager", "salesRepresentative", "supplier"] },
@@ -52,7 +52,9 @@ export default function App() {
   }
 
   const active = items.find((item) => item.id === page) || items[0];
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const result = await confirmAction({ title: "Sign out?", text: "You can sign back in at any time.", confirmText: "Sign out", icon: "question" });
+    if (!result.isConfirmed) return;
     localStorage.removeItem("warehouse-session");
     setSession(null);
   };
@@ -67,41 +69,40 @@ export default function App() {
   }[active.id];
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <a className="brand" href="#" onClick={(event) => { event.preventDefault(); setPage("overview"); }}>
-          <span className="brand-mark">W</span>
-          <span className="brand-copy"><strong>Wareflow</strong><small>INVENTORY PLATFORM</small></span>
+    <div className="flex min-h-screen bg-[#eeeee7] text-[#202820]">
+      <aside className="flex w-full shrink-0 flex-col bg-[#171e18] px-4 pb-4 pt-5 text-white md:w-60 md:px-4 md:pt-7">
+        <a className="mb-4 flex items-center gap-3 md:mb-10" href="#" onClick={(event) => { event.preventDefault(); setPage("overview"); }}>
+          <span className="grid size-10 place-items-center rounded-md bg-[#c9ef6b] text-lg font-extrabold text-[#172019]">W</span>
+          <span className="grid gap-0.5"><strong className="text-base font-bold">Wareflow</strong><small className="text-[8px] font-semibold tracking-[.16em] text-[#a7b09d]">INVENTORY PLATFORM</small></span>
         </a>
-        <div className="sidebar-label">YOUR WORKSPACE</div>
-        <nav className="main-nav" aria-label="Main navigation">
+        <div className="mb-3 hidden px-3 text-[9px] font-bold tracking-[.18em] text-[#849080] md:block">YOUR WORKSPACE</div>
+        <nav className="flex gap-1 overflow-x-auto pb-2 md:flex-1 md:flex-col md:gap-0 md:overflow-visible" aria-label="Main navigation">
           {["Workspace", "Operations", "Manage"].map((section) => {
             const links = items.filter((item) => item.section === section);
-            return links.length ? <div className="nav-section" key={section}>
-              <span className="nav-section-title">{section}</span>
-              {links.map((item) => <button key={item.id} className={`nav-link ${page === item.id ? "active" : ""}`} onClick={() => setPage(item.id)}>
-                <span className="nav-icon">{icons[item.id]}</span>{item.label}
-                {item.id === "inventory" && <span className="nav-dot" />}
-              </button>)}
+            return links.length ? <div className="md:mb-6" key={section}>
+              <span className="mb-2 hidden px-3 text-[10px] font-semibold text-[#91a294] md:block">{section}</span>
+              <div className="flex gap-1 md:flex-col">{links.map((item) => <button key={item.id} className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs font-medium transition hover:bg-white/10 md:w-full md:gap-3 ${page === item.id ? "bg-[#c9ef6b]/10 text-[#d7f78b] md:shadow-[inset_2px_0_#c9ef6b]" : "text-[#b8c0b1]"}`} onClick={() => setPage(item.id)}>
+                <span className="grid w-4 place-items-center text-sm">{icons[item.id]}</span><span>{item.label}</span>
+              </button>)}</div>
             </div> : null;
           })}
         </nav>
-        <div className="sidebar-bottom">
-          <div className="help-card"><span className="help-icon">?</span><strong>Need a hand?</strong><span>Ask your workspace admin for support.</span></div>
-          <button className="profile-button" onClick={handleLogout} title="Sign out">
-            <span className="avatar">{(session.user.name || session.user.email || "U").slice(0, 1).toUpperCase()}</span>
-            <span className="profile-copy"><strong>{session.user.name || "Team member"}</strong><small>{session.user.role}</small></span>
-            <span className="profile-menu">↗</span>
+        <div className="mt-4 hidden md:mt-auto md:block">
+          <div className="mb-4 grid gap-1 rounded-lg border border-white/10 bg-white/5 p-3"><span className="mb-1 grid size-6 place-items-center rounded bg-white/10 text-xs text-[#d5f48a]">?</span><strong className="text-[11px]">Need a hand?</strong><span className="text-[10px] leading-relaxed text-[#9aac9c]">Ask your workspace admin for support.</span></div>
+          <button className="flex w-full items-center gap-3 border-t border-white/10 pt-4 text-left" onClick={handleLogout} title="Sign out">
+            <span className="grid size-9 shrink-0 place-items-center rounded-md bg-[#d9e3d6] text-sm font-bold text-[#203d32]">{(session.user.name || session.user.email || "U").slice(0, 1).toUpperCase()}</span>
+            <span className="grid min-w-0 flex-1 gap-1"><strong className="truncate text-[11px]">{session.user.name || "Team member"}</strong><small className="text-[10px] capitalize text-[#a5b3a5]">{session.user.role}</small></span>
+            <span className="text-sm text-[#a5b3a5]">↗</span>
           </button>
         </div>
       </aside>
-      <main className="main-area">
-        <header className="topbar">
-          <div className="breadcrumb"><span>Workspace</span><b>/</b><strong>{active.label}</strong></div>
-          <div className="topbar-actions"><span className="status-pill"><i /> System operational</span><span className="topbar-divider" /><span className="today-label">{new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date())}</span></div>
+      <main className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#dedfd4] bg-[#fbfaf5] px-5 sm:px-8">
+          <div className="flex items-center gap-2 text-xs text-[#969d91]"><span>Workspace</span><b className="font-normal text-[#c4c6b9]">/</b><strong className="font-semibold text-[#39483e]">{active.label}</strong></div>
+          <div className="flex items-center gap-3 text-[10px] text-[#858e82]"><span className="flex items-center gap-2 rounded border border-[#dfe4df] bg-[#f7f8f1] px-2.5 py-1.5"><i className="size-1.5 rounded-full bg-[#79945a]" />Workspace</span><span className="hidden text-[#828b80] sm:block">{new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date())}</span></div>
         </header>
-        <section className="page-content" key={active.id}>{content}</section>
-        <footer className="app-footer"><span>Wareflow <b>·</b> Inventory operations, made clear.</span><span>API connected <i /></span></footer>
+        <section className="mx-auto w-full max-w-[1540px] flex-1 p-5 sm:p-8" key={active.id}>{content}</section>
+        <footer className="flex justify-between border-t border-[#dedfd4] px-5 py-3 text-[10px] text-[#92998e] sm:px-8"><span>Wareflow <b className="mx-1 text-[#c1c5b9]">·</b> Inventory operations, made clear.</span><span className="flex items-center gap-2">API connected <i className="size-1.5 rounded-full bg-[#79945a]" /></span></footer>
       </main>
     </div>
   );

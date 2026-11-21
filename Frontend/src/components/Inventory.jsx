@@ -1,13 +1,16 @@
 import { useCallback, useState } from "react";
 import { apiRequest } from "../lib/api.js";
-import { Button, EmptyState, Field, LoadingState, Notice, PageHeader, Panel, SelectField } from "./UI.jsx";
+import { showError, showSuccess } from "../lib/alerts.js";
 import { useLoad } from "../lib/useLoad.js";
+import { Button, EmptyState, Field, LoadingState, Modal, PageHeader, Panel, SelectField } from "./UI.jsx";
+
+const initialForm = { product: "", warehouse: "", quantity: "", note: "" };
 
 export default function Inventory({ token }) {
   const [dialog, setDialog] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ product: "", warehouse: "", quantity: "", note: "" });
+  const [form, setForm] = useState(initialForm);
   const load = useCallback(async () => {
     const [stock, warehouses, products] = await Promise.all([
       apiRequest("/stock", { token }),
@@ -25,41 +28,54 @@ export default function Inventory({ token }) {
     try {
       await apiRequest(`/stock/${dialog}`, { token, method: "POST", body: { ...form, quantity: Number(form.quantity) } });
       setDialog("");
-      setForm({ product: "", warehouse: "", quantity: "", note: "" });
+      setForm(initialForm);
       await reload();
-    } catch (err) { setError(err.message); }
-    finally { setBusy(false); }
+      await showSuccess(dialog === "in" ? "Stock received" : "Stock updated");
+    } catch (err) {
+      setError(err.message);
+      await showError(err.message);
+    } finally { setBusy(false); }
   };
   const stocks = data?.stock || [];
 
   return <>
-    <PageHeader eyebrow="STOCK CONTROL" title="Inventory" description="Track stock levels across your assigned warehouses." action={<div className="button-row"><Button variant="secondary" onClick={() => setDialog("out")}>− Stock out</Button><Button onClick={() => setDialog("in")}>＋ Stock in</Button></div>} />
-    <Notice message={loadError} />
+    <PageHeader eyebrow="STOCK CONTROL" title="Inventory" description="Track stock levels across your assigned warehouses." action={<div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => setDialog("out")}>− Stock out</Button><Button onClick={() => setDialog("in")}>＋ Stock in</Button></div>} />
+    {loadError && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-4 py-3 text-xs text-[#9d5144]">{loadError}</div>}
     {loading ? <LoadingState /> : <>
-      <div className="inventory-summary">
-        <div><span>Tracked items</span><b>{stocks.length}</b><small>Product / warehouse combinations</small></div>
-        <div><span>Total units</span><b>{stocks.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()}</b><small>Across visible locations</small></div>
-        <div><span>Low stock</span><b className="text-amber">{stocks.filter((item) => item.product && item.quantity <= item.product.lowStockLimit).length}</b><small>At or below reorder point</small></div>
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <SummaryCard label="Tracked items" value={stocks.length} caption="Product / warehouse combinations" />
+        <SummaryCard label="Total units" value={stocks.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()} caption="Across visible locations" />
+        <SummaryCard label="Low stock" value={stocks.filter((item) => item.product && item.quantity <= item.product.lowStockLimit).length} caption="At or below reorder point" />
       </div>
-      <Panel title="Stock on hand" subtitle={`${stocks.length} product and warehouse combinations`} className="table-panel">
-        {stocks.length ? <div className="table-wrap"><table><thead><tr><th>Product</th><th>SKU</th><th>Warehouse</th><th>On hand</th><th>Reorder point</th><th>Status</th></tr></thead><tbody>
-          {stocks.map((item) => {
+      <Panel title="Stock on hand" subtitle={`${stocks.length} product and warehouse combinations`}>
+        {stocks.length ? <div className="overflow-x-auto"><table className="w-full border-collapse text-left">
+          <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261]"><tr>{["Product", "SKU", "Warehouse", "On hand", "Reorder point", "Status"].map((item) => <th className="border-b border-[#e1e2d7] px-4 py-3 font-bold" key={item}>{item}</th>)}</tr></thead>
+          <tbody>{stocks.map((item) => {
             const low = item.product && item.quantity <= item.product.lowStockLimit;
-            return <tr key={item._id}><td><strong>{item.product?.name || "Deleted product"}</strong><small>{item.product?.category || "—"}</small></td><td className="mono">{item.product?.sku || "—"}</td><td>{item.warehouse?.name || "Deleted warehouse"}</td><td className="table-number">{item.quantity}</td><td>{item.product?.lowStockLimit ?? "—"}</td><td><span className={`stock-state ${low ? "stock-low" : "stock-good"}`}><i />{low ? "Reorder" : "In stock"}</span></td></tr>;
-          })}
-        </tbody></table></div> : <EmptyState title="No stock recorded">Record a stock-in transaction to start tracking inventory.</EmptyState>}
+            return <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0]" key={item._id}>
+              <td className="px-4 py-3"><strong className="font-semibold text-[#3d4c41]">{item.product?.name || "Deleted product"}</strong><small className="mt-1 block text-[10px] text-[#929b90]">{item.product?.category || "—"}</small></td>
+              <td className="px-4 py-3 font-mono">{item.product?.sku || "—"}</td><td className="px-4 py-3">{item.warehouse?.name || "Deleted warehouse"}</td>
+              <td className="px-4 py-3 font-bold tabular-nums text-[#34443a]">{item.quantity}</td><td className="px-4 py-3">{item.product?.lowStockLimit ?? "—"}</td>
+              <td className="px-4 py-3"><span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[10px] font-semibold ${low ? "text-[#b4743b]" : "text-[#4b7957]"}`}><i className={`size-1.5 rounded-full ${low ? "bg-[#d69a58]" : "bg-[#6a996d]"}`} />{low ? "Reorder" : "In stock"}</span></td>
+            </tr>;
+          })}</tbody>
+        </table></div> : <EmptyState title="No stock recorded">Record a stock-in transaction to start tracking inventory.</EmptyState>}
       </Panel>
     </>}
-    {dialog && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDialog(""); }}><section className="modal-card" role="dialog" aria-modal="true" aria-label="Record stock">
-      <div className="modal-heading"><div><div className="eyebrow">INVENTORY TRANSACTION</div><h2>{dialog === "in" ? "Receive stock" : "Record stock out"}</h2></div><button className="icon-button" onClick={() => setDialog("")}>×</button></div>
-      <Notice message={error} />
-      <form className="form-stack" onSubmit={submit}>
+    {dialog && <Modal title={dialog === "in" ? "Receive stock" : "Record stock out"} onClose={() => setDialog("")}>
+      <div className="mb-5 text-[10px] font-bold tracking-[.15em] text-[#78866a]">INVENTORY TRANSACTION</div>
+      {error && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-3 py-2.5 text-xs text-[#9d5144]">{error}</div>}
+      <form className="grid gap-4" onSubmit={submit}>
         <SelectField label="Product" value={form.product} onChange={change("product")} options={(data?.products || []).map((product) => ({ value: product._id, label: `${product.name} · ${product.sku}` }))} required />
         <SelectField label="Warehouse" value={form.warehouse} onChange={change("warehouse")} options={(data?.warehouses || []).map((warehouse) => ({ value: warehouse._id, label: warehouse.name }))} required />
         <Field label="Quantity" type="number" min="1" step="1" value={form.quantity} onChange={change("quantity")} required />
         <Field label="Note (optional)" placeholder="Add a reference or note" value={form.note} onChange={change("note")} />
-        <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setDialog("")}>Cancel</Button><Button disabled={busy}>{busy ? "Saving…" : dialog === "in" ? "Record stock in" : "Record stock out"}</Button></div>
+        <div className="mt-1 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setDialog("")}>Cancel</Button><Button disabled={busy}>{busy ? "Saving…" : dialog === "in" ? "Record stock in" : "Record stock out"}</Button></div>
       </form>
-    </section></div>}
+    </Modal>}
   </>;
+}
+
+function SummaryCard({ label, value, caption }) {
+  return <div className="grid gap-1 rounded-xl border border-[#dedfd4] bg-[#fbfaf5] p-4 shadow-sm"><span className="text-[10px] text-[#858e81]">{label}</span><b className="text-2xl font-semibold tracking-tight text-[#34443a]">{value}</b><small className="text-[10px] text-[#92998e]">{caption}</small></div>;
 }

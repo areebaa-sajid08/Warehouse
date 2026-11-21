@@ -1,25 +1,29 @@
 import { useCallback } from "react";
 import { apiRequest } from "../lib/api.js";
-import { EmptyState, LoadingState, PageHeader, Panel, StatusBadge } from "./UI.jsx";
+import { formatCurrency } from "../lib/format.js";
 import { useLoad } from "../lib/useLoad.js";
+import { EmptyState, LoadingState, PageHeader, Panel, StatusBadge } from "./UI.jsx";
 
 export default function Dashboard({ user, token, onNavigate }) {
   const load = useCallback(async () => {
     if (user.role === "admin") {
-      const [stats, stock, orders] = await Promise.all([
+      const [stats, warehouses, stock, products, orders] = await Promise.all([
         apiRequest("/dashboard/stats", { token }),
-        apiRequest("/stock/low", { token }),
+        apiRequest("/warehouses", { token }),
+        apiRequest("/stock", { token }),
+        apiRequest("/products", { token }),
         apiRequest("/orders", { token }),
       ]);
-      return { stats, lowStock: stock.lowStock, orders: orders.orders };
+      return { stats, warehouses: warehouses.warehouses, stock: stock.stock, products: products.products, orders: orders.orders };
     }
     if (user.role === "warehouseManager") {
-      const [warehouses, stock, orders] = await Promise.all([
+      const [warehouses, stock, products, orders] = await Promise.all([
         apiRequest("/warehouses", { token }),
-        apiRequest("/stock/low", { token }),
+        apiRequest("/stock", { token }),
+        apiRequest("/products", { token }),
         apiRequest("/orders", { token }),
       ]);
-      return { warehouses: warehouses.warehouses, lowStock: stock.lowStock, orders: orders.orders };
+      return { warehouses: warehouses.warehouses, stock: stock.stock, products: products.products, orders: orders.orders };
     }
     if (user.role === "salesRepresentative") {
       const [orders, products] = await Promise.all([
@@ -36,82 +40,122 @@ export default function Dashboard({ user, token, onNavigate }) {
   }, [token, user.role]);
   const { data, loading, error } = useLoad(load);
 
+  const stock = data?.stock || [];
+  const products = data?.products || [];
+  const warehouses = data?.warehouses || [];
+  const orders = data?.orders || [];
+  const requests = data?.requests || [];
+  const lowStock = stock.filter((item) => item.product && item.quantity <= item.product.lowStockLimit);
+  const unitsOnHand = stock.reduce((total, item) => total + item.quantity, 0);
+
   const metrics = user.role === "admin"
-    ? [
-      ["Products", data?.stats?.products ?? "—", "In your catalog", "◇"],
-      ["Warehouses", data?.stats?.warehouses ?? "—", "Active locations", "▤"],
-      ["Open orders", data?.stats?.orders ?? "—", "Across all locations", "⇄"],
-      ["Low stock", data?.stats?.lowStockProducts ?? "—", "Need your attention", "↓"],
-    ]
+    ? [["Products", data?.stats?.products ?? 0, "In the live catalog", "◇"], ["Locations", warehouses.length, "Across your network", "▤"], ["Units on hand", unitsOnHand.toLocaleString(), "From recorded stock", "▥"], ["Reorder alerts", lowStock.length, "At or below reorder point", "↓"]]
     : user.role === "warehouseManager"
-      ? [
-        ["My warehouses", data?.warehouses?.length ?? "—", "Assigned locations", "▤"],
-        ["Low stock", data?.lowStock?.length ?? "—", "Items to replenish", "↓"],
-        ["Orders", data?.orders?.length ?? "—", "To keep things moving", "⇄"],
-      ]
+      ? [["My locations", warehouses.length, "Assigned warehouses", "▤"], ["Stock records", stock.length, "Product / location pairs", "▥"], ["Units on hand", unitsOnHand.toLocaleString(), "Across assigned sites", "▦"], ["Reorder alerts", lowStock.length, "Need a closer look", "↓"]]
       : user.role === "salesRepresentative"
-        ? [
-          ["My orders", data?.orders?.length ?? "—", "Placed by you", "⇄"],
-          ["Products", data?.products?.length ?? "—", "Available to order", "◇"],
-          ["Pending", data?.orders?.filter((item) => item.status === "Pending").length ?? "—", "Awaiting processing", "◷"],
-        ]
-        : [
-          ["My requests", data?.requests?.length ?? "—", "Supply requests", "↗"],
-          ["Pending review", data?.requests?.filter((item) => item.status === "Pending").length ?? "—", "Awaiting a decision", "◷"],
-          ["Products", data?.products?.length ?? "—", "Available products", "◇"],
-        ];
+        ? [["My orders", orders.length, "Created by your account", "⇄"], ["To process", orders.filter((item) => item.status === "Pending" || item.status === "Processing").length, "Pending or in progress", "◷"], ["Products", products.length, "In the live catalog", "◇"], ["Completed value", formatCurrency(orders.filter((item) => item.status === "Completed").reduce((sum, item) => sum + item.totalAmount, 0)), "From completed orders", "$"]]
+        : [["My requests", requests.length, "Submitted by your account", "↗"], ["Awaiting review", requests.filter((item) => item.status === "Pending").length, "Pending requests", "◷"], ["Approved", requests.filter((item) => item.status === "Approved").length, "Approved requests", "✓"], ["Products", products.length, "In the live catalog", "◇"]];
 
   return <>
-    <PageHeader eyebrow="YOUR WORKSPACE" title={`Good ${getGreeting()}, ${user.name?.split(" ")[0] || "there"}.`} description="Here’s what’s happening across your inventory today." action={<button className="button button-secondary" onClick={() => window.location.reload()}>↻ <span>Refresh</span></button>} />
-    {loading ? <LoadingState label="Loading your workspace" /> : error ? <div className="notice notice-error">{error}</div> : <>
-      <div className={`metric-grid metric-count-${metrics.length}`}>
-        {metrics.map(([label, value, caption, icon], index) => <article className={`metric-card metric-accent-${index}`} key={label}>
-          <div className="metric-top"><span>{label}</span><span className="metric-icon">{icon}</span></div>
-          <strong>{value}</strong><small>{caption}</small>
+    <PageHeader eyebrow="WAREHOUSE CONTROL ROOM" title={`Good ${getGreeting()}, ${user.name?.split(" ")[0] || "there"}.`} description="A live view of the records your team has put into the system." action={<span className="inline-flex items-center gap-2 rounded border border-[#dfe4d2] bg-[#f7f8ef] px-3 py-2 text-[9px] font-bold tracking-widest text-[#65764c]"><i className="size-1.5 rounded-full bg-[#9abb56] ring-4 ring-[#dce8c7]" />LIVE DATABASE</span>} />
+    {loading ? <LoadingState label="Loading your workspace" /> : error ? <div className="rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-4 py-3 text-xs text-[#9d5144]">{error}</div> : <>
+      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {metrics.map(([label, value, caption, icon], index) => <article key={label} className="group relative min-h-32 overflow-hidden rounded-xl border border-[#dedfd4] bg-[#fbfaf5] p-4 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg">
+          <div className={`absolute inset-x-0 top-0 h-1 ${index === 3 ? "bg-[#c9ef6b]" : index === 1 ? "bg-[#c5a26c]" : "bg-[#82945d]"}`} />
+          <div className="flex items-center justify-between text-[11px] font-semibold text-[#737d70]"><span>{label}</span><span className="grid size-8 place-items-center rounded-md bg-[#e8efda] text-sm text-[#293627]">{icon}</span></div>
+          <strong className="mt-4 block truncate text-2xl font-semibold tracking-tight text-[#293a30]">{value}</strong>
+          <small className="text-[10px] text-[#929a8f]">{caption}</small>
         </article>)}
       </div>
-      <div className="dashboard-grid">
-        <Panel title={user.role === "supplier" ? "Recent supply requests" : "Items to keep an eye on"} subtitle={user.role === "supplier" ? "Your latest supplier activity" : "Stock at or below its reorder point"} action={<button className="text-button" onClick={() => onNavigate(user.role === "supplier" ? "supply" : user.role === "salesRepresentative" ? "orders" : "inventory")}>View all <span>→</span></button>}>
-          {user.role === "supplier"
-            ? <RequestList items={(data?.requests || []).slice(0, 5)} />
-            : user.role === "salesRepresentative"
-              ? <OrderList items={(data?.orders || []).slice(0, 5)} />
-              : <LowStockList items={(data?.lowStock || []).slice(0, 5)} />}
+
+      {["admin", "warehouseManager"].includes(user.role) ? <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Panel title="Warehouse floor" subtitle="On-hand quantities by location" action={<LinkButton onClick={() => onNavigate("inventory")}>Open inventory</LinkButton>} className="xl:col-span-2">
+          <WarehouseCapacity warehouses={warehouses} stock={stock} />
         </Panel>
-        <Panel title="Quick actions" subtitle="Jump back into your workflow">
-          <div className="quick-actions">
-            {user.role !== "supplier" && <button onClick={() => onNavigate("products")}><span className="quick-icon violet">◇</span><span><b>Browse products</b><small>View product details</small></span><i>→</i></button>}
-            {(user.role === "admin" || user.role === "warehouseManager") && <button onClick={() => onNavigate("inventory")}><span className="quick-icon green">▦</span><span><b>Manage inventory</b><small>Update stock levels</small></span><i>→</i></button>}
-            {(user.role === "admin" || user.role === "salesRepresentative") && <button onClick={() => onNavigate("orders")}><span className="quick-icon amber">⇄</span><span><b>Manage orders</b><small>Review recent activity</small></span><i>→</i></button>}
-            {user.role === "supplier" && <button onClick={() => onNavigate("supply")}><span className="quick-icon green">↗</span><span><b>Submit supply request</b><small>Request stock replenishment</small></span><i>→</i></button>}
-          </div>
+        <Panel title="Reorder watch" subtitle="Items below their saved threshold" action={<LinkButton onClick={() => onNavigate("inventory")}>View stock</LinkButton>}>
+          <LowStockList items={lowStock.slice(0, 5)} />
         </Panel>
-      </div>
+        <Panel title="Recently added products" subtitle="Newest records from your catalog" action={<LinkButton onClick={() => onNavigate("products")}>All products</LinkButton>}>
+          <RecentProductList items={products} />
+        </Panel>
+        <Panel title="Latest orders" subtitle="Recent customer orders" action={<LinkButton onClick={() => onNavigate("orders")}>All orders</LinkButton>}>
+          <OrderList items={orders.slice(0, 5)} />
+        </Panel>
+      </div> : user.role === "salesRepresentative" ? <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Panel title="Recent orders" subtitle="Orders created by your account" action={<LinkButton onClick={() => onNavigate("orders")}>Manage orders</LinkButton>}><OrderList items={orders.slice(0, 5)} /></Panel>
+        <Panel title="Product catalog" subtitle="Current products and prices" action={<LinkButton onClick={() => onNavigate("products")}>Browse catalog</LinkButton>}><RecentProductList items={products} /></Panel>
+      </div> : <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Panel title="Supply request activity" subtitle="Requests submitted from your account" action={<LinkButton onClick={() => onNavigate("supply")}>Manage requests</LinkButton>}><RequestList items={requests.slice(0, 5)} /></Panel>
+        <Panel title="Product catalog" subtitle="Current products available to request" action={<LinkButton onClick={() => onNavigate("products")}>Browse catalog</LinkButton>}><RecentProductList items={products} /></Panel>
+      </div>}
     </>}
-    <div className="dashboard-note"><span>✦</span><div><b>A clear view makes a better next move.</b><small>Your workspace updates as your team records stock, orders, and requests.</small></div></div>
   </>;
 }
 
+function LinkButton({ children, onClick }) {
+  return <button className="text-[10px] font-bold text-[#4b6337] hover:text-[#263f26] hover:underline" onClick={onClick}>{children} <span className="text-[#7c9549]">→</span></button>;
+}
+
+function WarehouseCapacity({ warehouses, stock }) {
+  if (!warehouses.length) return <EmptyState title="No warehouse locations yet">Add a warehouse to see its stock position here.</EmptyState>;
+  return <div className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2">
+    {warehouses.map((warehouse) => {
+      const warehouseStock = stock.filter((item) => item.warehouse?._id === warehouse._id);
+      const units = warehouseStock.reduce((sum, item) => sum + item.quantity, 0);
+      const percentage = warehouse.capacity > 0 ? Math.min(100, Math.round(units / warehouse.capacity * 100)) : null;
+      return <div className="flex min-w-0 items-center gap-3 rounded-lg border border-[#e6e7dc] bg-[#f7f7f0] p-3" key={warehouse._id}>
+        <span className="grid size-9 shrink-0 place-items-center rounded-md border border-[#dce2cb] bg-[#edf2e2] text-sm text-[#455e35]">▤</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2"><strong className="truncate text-[11px] text-[#303e30]">{warehouse.name}</strong><span className="truncate text-[9px] text-[#838b7d]">{warehouse.location}</span></div>
+          <div className="my-2 h-1 overflow-hidden rounded bg-[#e4e6d9]"><span className="block h-full rounded bg-[#a4ca5d] transition-all" style={{ width: `${percentage ?? 0}%` }} /></div>
+          <small className="text-[9px] text-[#828b7d]">{percentage === null ? "Capacity not set" : `${percentage}% of ${warehouse.capacity.toLocaleString()} unit capacity`}</small>
+        </div>
+        <div className="grid justify-items-end"><strong className="text-xs text-[#2e3c2e]">{units.toLocaleString()}</strong><small className="text-[9px] text-[#878f82]">units</small></div>
+      </div>;
+    })}
+  </div>;
+}
+
+function CompactList({ items, render, emptyTitle, emptyText }) {
+  if (!items.length) return <EmptyState title={emptyTitle}>{emptyText}</EmptyState>;
+  return <div className="px-4 pb-2">{items.map(render)}</div>;
+}
+
 function LowStockList({ items }) {
-  if (!items.length) return <EmptyState title="Stock looks healthy">No products are currently below their reorder point.</EmptyState>;
-  return <div className="compact-list">{items.map((item) => <div className="compact-row" key={item._id}>
-    <span className="product-placeholder">{item.product?.name?.slice(0, 1) || "P"}</span><span className="compact-copy"><b>{item.product?.name || "Product"}</b><small>{item.warehouse?.name || "Warehouse"}</small></span>
-    <span className="quantity-alert">{item.quantity}<small>left</small></span>
-  </div>)}</div>;
+  return <CompactList items={items} emptyTitle="No reorder alerts" emptyText="No recorded stock is currently at or below its reorder point." render={(item) =>
+    <div className="flex min-h-16 items-center gap-3 border-t border-[#edede5] py-2" key={item._id}>
+      <span className="grid size-9 shrink-0 place-items-center rounded-md bg-[#edf1e9] text-xs font-bold uppercase text-[#4d6c53]">{item.product?.name?.slice(0, 1) || "P"}</span>
+      <span className="grid min-w-0 flex-1 gap-1"><b className="truncate text-[11px] text-[#3a493e]">{item.product?.name || "Product"}</b><small className="truncate text-[9px] text-[#92998e]">{item.warehouse?.name || "Warehouse"} · reorder at {item.product?.lowStockLimit}</small></span>
+      <span className="text-xs font-bold text-[#b56e39]">{item.quantity}<small className="ml-1 font-normal text-[#999f94]">left</small></span>
+    </div>} />;
+}
+
+function RecentProductList({ items }) {
+  const recent = [...items].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 5);
+  return <CompactList items={recent} emptyTitle="No products yet" emptyText="Products saved to the database will appear here." render={(product) =>
+    <div className="flex min-h-16 items-center gap-3 border-t border-[#edede5] py-2" key={product._id}>
+      {product.imageUrl ? <img className="size-9 shrink-0 rounded-md object-cover" src={product.imageUrl} alt="" /> : <span className="grid size-9 shrink-0 place-items-center rounded-md bg-[#edf1e9] text-xs font-bold uppercase text-[#4d6c53]">{product.name?.slice(0, 1) || "P"}</span>}
+      <span className="grid min-w-0 flex-1 gap-1"><b className="truncate text-[11px] text-[#3a493e]">{product.name}</b><small className="truncate text-[9px] text-[#92998e]">{product.sku} · {product.category || "Uncategorized"}</small></span>
+      <strong className="whitespace-nowrap text-[10px] text-[#485e37]">{formatCurrency(product.price)}</strong>
+    </div>} />;
 }
 
 function OrderList({ items }) {
-  if (!items.length) return <EmptyState title="No orders yet">New orders will show up here.</EmptyState>;
-  return <div className="compact-list">{items.map((order) => <div className="compact-row" key={order._id}>
-    <span className="order-mark">#</span><span className="compact-copy"><b>{order.orderNumber}</b><small>{order.customerName}</small></span><StatusBadge>{order.status}</StatusBadge>
-  </div>)}</div>;
+  return <CompactList items={items} emptyTitle="No orders yet" emptyText="New orders saved to the database will appear here." render={(order) =>
+    <div className="flex min-h-16 items-center gap-3 border-t border-[#edede5] py-2" key={order._id}>
+      <span className="grid size-9 shrink-0 place-items-center rounded-md bg-[#f1eddf] text-xs font-bold text-[#725a34]">#</span>
+      <span className="grid min-w-0 flex-1 gap-1"><b className="truncate text-[11px] text-[#3a493e]">{order.orderNumber}</b><small className="truncate text-[9px] text-[#92998e]">{order.customerName} · {formatCurrency(order.totalAmount)}</small></span>
+      <StatusBadge>{order.status}</StatusBadge>
+    </div>} />;
 }
 
 function RequestList({ items }) {
-  if (!items.length) return <EmptyState title="No requests yet">Your requests and their status will appear here.</EmptyState>;
-  return <div className="compact-list">{items.map((request) => <div className="compact-row" key={request._id}>
-    <span className="order-mark">↗</span><span className="compact-copy"><b>{request.product?.name || "Supply request"}</b><small>{request.quantity} units · {request.warehouse?.name || "Warehouse"}</small></span><StatusBadge>{request.status}</StatusBadge>
-  </div>)}</div>;
+  return <CompactList items={items} emptyTitle="No supply requests" emptyText="Requests from your account will appear here." render={(request) =>
+    <div className="flex min-h-16 items-center gap-3 border-t border-[#edede5] py-2" key={request._id}>
+      <span className="grid size-9 shrink-0 place-items-center rounded-md bg-[#f1eddf] text-xs font-bold text-[#725a34]">↗</span>
+      <span className="grid min-w-0 flex-1 gap-1"><b className="truncate text-[11px] text-[#3a493e]">{request.product?.name || "Supply request"}</b><small className="truncate text-[9px] text-[#92998e]">{request.quantity} units · {request.warehouse?.name || "Warehouse"}</small></span>
+      <StatusBadge>{request.status}</StatusBadge>
+    </div>} />;
 }
 
 function getGreeting() {

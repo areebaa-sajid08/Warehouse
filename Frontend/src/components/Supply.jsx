@@ -1,13 +1,16 @@
 import { useCallback, useState } from "react";
 import { apiRequest } from "../lib/api.js";
-import { Button, EmptyState, Field, LoadingState, Modal, Notice, PageHeader, Panel, SelectField, StatusBadge } from "./UI.jsx";
+import { confirmAction, showError, showSuccess } from "../lib/alerts.js";
 import { useLoad } from "../lib/useLoad.js";
+import { Button, EmptyState, Field, LoadingState, Modal, PageHeader, Panel, SelectField, StatusBadge } from "./UI.jsx";
+
+const initialForm = { product: "", warehouse: "", quantity: "" };
 
 export default function Supply({ token, user }) {
   const [dialog, setDialog] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({ product: "", warehouse: "", quantity: "" });
+  const [form, setForm] = useState(initialForm);
   const load = useCallback(async () => {
     const [requests, products, warehouses] = await Promise.all([
       apiRequest("/supply-requests", { token }),
@@ -26,47 +29,62 @@ export default function Supply({ token, user }) {
     try {
       await apiRequest("/supply-requests", { token, method: "POST", body: { ...form, quantity: Number(form.quantity) } });
       setDialog(false);
-      setForm({ product: "", warehouse: "", quantity: "" });
+      setForm(initialForm);
       await reload();
-    } catch (err) { setError(err.message); }
-    finally { setBusy(false); }
+      await showSuccess("Supply request submitted");
+    } catch (err) {
+      setError(err.message);
+      await showError(err.message);
+    } finally { setBusy(false); }
   };
   const updateStatus = async (request, status) => {
+    if (status === "Approved") {
+      const confirmation = await confirmAction({
+        title: "Approve supply request?",
+        text: "The requested quantity will be added to this warehouse's inventory.",
+        confirmText: "Approve request",
+        icon: "question",
+      });
+      if (!confirmation.isConfirmed) return;
+    }
     try {
       await apiRequest(`/supply-requests/${request._id}/status`, { token, method: "PUT", body: { status } });
       await reload();
-    } catch (err) { window.alert(err.message); }
+      await showSuccess(status === "Approved" ? "Request approved" : "Request rejected");
+    } catch (err) { await showError(err.message); }
   };
   const requests = data?.requests || [];
+  const summaries = [
+    ["Total requests", requests.length],
+    ["Pending", requests.filter((item) => item.status === "Pending").length],
+    ["Approved", requests.filter((item) => item.status === "Approved").length],
+    ["Rejected", requests.filter((item) => item.status === "Rejected").length],
+  ];
 
   return <>
     <PageHeader eyebrow="SUPPLIER OPERATIONS" title={isSupplier ? "My supply requests" : "Supply requests"} description={isSupplier ? "Request replenishment and track your approvals." : "Review incoming requests and replenish warehouse stock."} action={isSupplier && <Button onClick={() => { setError(""); setDialog(true); }}>＋ New request</Button>} />
-    <Notice message={loadError} />
-    <div className="order-summary">
-      <div><span>Total requests</span><b>{requests.length}</b></div>
-      <div><span>Pending</span><b>{requests.filter((item) => item.status === "Pending").length}</b></div>
-      <div><span>Approved</span><b>{requests.filter((item) => item.status === "Approved").length}</b></div>
-      <div><span>Rejected</span><b>{requests.filter((item) => item.status === "Rejected").length}</b></div>
-    </div>
-    {loading ? <LoadingState /> : <Panel className="table-panel" title="Request activity" subtitle="Supply requests and their latest status">
-      {!requests.length ? <EmptyState title="No supply requests">{isSupplier ? "Submit a request when your products need replenishing." : "Supplier requests will appear here."}</EmptyState> : <div className="table-wrap"><table>
-        <thead><tr><th>Product</th><th>Supplier</th><th>Warehouse</th><th>Quantity</th><th>Submitted</th><th>Status</th>{!isSupplier && <th>Action</th>}</tr></thead>
-        <tbody>{requests.map((request) => <tr key={request._id}>
-          <td><strong>{request.product?.name || "Product"}</strong><small className="mono">{request.product?.sku || ""}</small></td>
-          <td>{request.supplier?.name || "Supplier"}</td><td>{request.warehouse?.name || "—"}</td><td className="table-number">{request.quantity}</td>
-          <td>{new Date(request.createdAt || request.date).toLocaleDateString()}</td><td><StatusBadge>{request.status}</StatusBadge></td>
-          {!isSupplier && <td>{request.status === "Pending" ? <div className="button-row compact-buttons"><button className="row-action" onClick={() => updateStatus(request, "Approved")}>Approve</button><button className="row-action danger-text" onClick={() => updateStatus(request, "Rejected")}>Reject</button></div> : "—"}</td>}
+    {loadError && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-4 py-3 text-xs text-[#9d5144]">{loadError}</div>}
+    <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">{summaries.map(([label, value]) => <div key={label} className="grid gap-1 rounded-xl border border-[#dedfd4] bg-[#fbfaf5] p-3 shadow-sm sm:p-4"><span className="text-[10px] text-[#858e81]">{label}</span><b className="text-2xl font-semibold tracking-tight text-[#34443a]">{value}</b></div>)}</div>
+    {loading ? <LoadingState /> : <Panel title="Request activity" subtitle="Supply requests and their latest status">
+      {!requests.length ? <EmptyState title="No supply requests">{isSupplier ? "Submit a request when your products need replenishing." : "Supplier requests will appear here."}</EmptyState> : <div className="overflow-x-auto"><table className="w-full border-collapse text-left">
+        <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261]"><tr>{["Product", "Supplier", "Warehouse", "Quantity", "Submitted", "Status", ...(!isSupplier ? ["Action"] : [])].map((item) => <th className="whitespace-nowrap border-b border-[#e1e2d7] px-4 py-3 font-bold" key={item}>{item}</th>)}</tr></thead>
+        <tbody>{requests.map((request) => <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0]" key={request._id}>
+          <td className="px-4 py-3"><strong className="font-semibold text-[#3d4c41]">{request.product?.name || "Product"}</strong><small className="mt-1 block font-mono text-[10px] text-[#929b90]">{request.product?.sku || ""}</small></td>
+          <td className="px-4 py-3">{request.supplier?.name || "Supplier"}</td><td className="px-4 py-3">{request.warehouse?.name || "—"}</td>
+          <td className="px-4 py-3 font-bold tabular-nums text-[#34443a]">{request.quantity}</td><td className="px-4 py-3">{new Date(request.createdAt || request.date).toLocaleDateString()}</td>
+          <td className="px-4 py-3"><StatusBadge>{request.status}</StatusBadge></td>
+          {!isSupplier && <td className="px-4 py-3">{request.status === "Pending" ? <div className="flex items-center gap-3"><button className="text-[10px] font-bold text-[#4b6337] hover:underline" onClick={() => updateStatus(request, "Approved")}>Approve</button><button className="text-[10px] font-bold text-[#b96050] hover:underline" onClick={() => updateStatus(request, "Rejected")}>Reject</button></div> : "—"}</td>}
         </tr>)}</tbody>
       </table></div>}
     </Panel>}
     {dialog && <Modal title="New supply request" onClose={() => setDialog(false)}>
-      <Notice message={error} />
-      <form className="form-stack" onSubmit={createRequest}>
+      {error && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-3 py-2.5 text-xs text-[#9d5144]">{error}</div>}
+      <form className="grid gap-4" onSubmit={createRequest}>
         <SelectField label="Product" value={form.product} onChange={change("product")} options={(data?.products || []).map((product) => ({ value: product._id, label: `${product.name} · ${product.sku}` }))} required />
         <SelectField label="Deliver to warehouse" value={form.warehouse} onChange={change("warehouse")} options={(data?.warehouses || []).map((warehouse) => ({ value: warehouse._id, label: warehouse.name }))} required />
         <Field label="Quantity requested" type="number" min="1" step="1" value={form.quantity} onChange={change("quantity")} required />
-        <div className="form-hint">Approved requests are added to the selected warehouse’s inventory.</div>
-        <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setDialog(false)}>Cancel</Button><Button disabled={busy}>{busy ? "Submitting…" : "Submit request"}</Button></div>
+        <p className="text-[11px] leading-relaxed text-[#858e82]">Approved requests are added to the selected warehouse’s inventory.</p>
+        <div className="mt-1 flex justify-end gap-2"><Button type="button" variant="secondary" onClick={() => setDialog(false)}>Cancel</Button><Button disabled={busy}>{busy ? "Submitting…" : "Submit request"}</Button></div>
       </form>
     </Modal>}
   </>;

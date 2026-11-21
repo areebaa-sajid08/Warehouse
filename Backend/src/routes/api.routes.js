@@ -82,6 +82,9 @@ router.put("/users/:id", authorize("admin"), async (req, res) => {
   } catch (error) { res.status(400).json({ message: error.message }); }
 });
 router.delete("/users/:id", authorize("admin"), async (req, res) => {
+  if (req.params.id.toLowerCase() === String(req.user.id).toLowerCase()) {
+    return res.status(403).json({ message: "You cannot delete your own account" });
+  }
   if (!await User.findByIdAndDelete(req.params.id)) return res.status(404).json({ message: "User not found" });
   res.json({ message: "User deleted" });
 });
