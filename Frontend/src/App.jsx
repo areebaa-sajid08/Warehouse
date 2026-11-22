@@ -5,6 +5,7 @@ import Inventory from "./components/Inventory.jsx";
 import Catalog from "./components/Catalog.jsx";
 import Orders from "./components/Orders.jsx";
 import Supply from "./components/Supply.jsx";
+import NotificationCenter from "./components/NotificationCenter.jsx";
 import { confirmAction } from "./lib/alerts.js";
 
 const navigation = [
@@ -29,9 +30,27 @@ function getStoredSession() {
   }
 }
 
+function getStoredTheme() {
+  try {
+    return localStorage.getItem("warehouse-theme") === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
 export default function App() {
   const [session, setSession] = useState(getStoredSession);
   const [page, setPage] = useState("overview");
+  const [theme, setTheme] = useState(getStoredTheme);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    try {
+      localStorage.setItem("warehouse-theme", theme);
+    } catch {
+      // The selected theme still applies for this session when storage is unavailable.
+    }
+  }, [theme]);
 
   useEffect(() => {
     const signOutExpiredSession = () => setSession(null);
@@ -48,7 +67,7 @@ export default function App() {
     return <AuthScreen onAuthenticated={(value) => {
       localStorage.setItem("warehouse-session", JSON.stringify(value));
       setSession(value);
-    }} />;
+    }} theme={theme} onToggleTheme={() => setTheme((value) => value === "dark" ? "light" : "dark")} />;
   }
 
   const active = items.find((item) => item.id === page) || items[0];
@@ -69,7 +88,7 @@ export default function App() {
   }[active.id];
 
   return (
-    <div className="flex min-h-screen bg-[#eeeee7] text-[#202820]">
+    <div className="flex min-h-screen bg-[#eeeee7] text-[#202820] dark:bg-[#111711] dark:text-[#e1e7dc]">
       <aside className="flex w-full shrink-0 flex-col bg-[#171e18] px-4 pb-4 pt-5 text-white md:w-60 md:px-4 md:pt-7">
         <a className="mb-4 flex items-center gap-3 md:mb-10" href="#" onClick={(event) => { event.preventDefault(); setPage("overview"); }}>
           <span className="grid size-10 place-items-center rounded-md bg-[#c9ef6b] text-lg font-extrabold text-[#172019]">W</span>
@@ -97,12 +116,16 @@ export default function App() {
         </div>
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#dedfd4] bg-[#fbfaf5] px-5 sm:px-8">
-          <div className="flex items-center gap-2 text-xs text-[#969d91]"><span>Workspace</span><b className="font-normal text-[#c4c6b9]">/</b><strong className="font-semibold text-[#39483e]">{active.label}</strong></div>
-          <div className="flex items-center gap-3 text-[10px] text-[#858e82]"><span className="flex items-center gap-2 rounded border border-[#dfe4df] bg-[#f7f8f1] px-2.5 py-1.5"><i className="size-1.5 rounded-full bg-[#79945a]" />Workspace</span><span className="hidden text-[#828b80] sm:block">{new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date())}</span></div>
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#dedfd4] bg-[#fbfaf5] px-5 dark:border-[#303a30] dark:bg-[#1a211b] sm:px-8">
+          <div className="flex items-center gap-2 text-xs text-[#969d91] dark:text-[#a0ad9d]"><span>Workspace</span><b className="font-normal text-[#c4c6b9] dark:text-[#657365]">/</b><strong className="font-semibold text-[#39483e] dark:text-[#d7dfd2]">{active.label}</strong></div>
+          <div className="flex items-center gap-2 text-[10px] text-[#858e82] sm:gap-3">
+            <NotificationCenter token={session.token} />
+            <button className="grid size-9 place-items-center rounded-md border border-[#dfe1d6] bg-[#fffefa] text-sm text-[#475542] hover:bg-[#f1f2eb] dark:border-[#414b3f] dark:bg-[#202820] dark:text-[#d4decf] dark:hover:bg-[#2c362c]" type="button" onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>{theme === "dark" ? "☀" : "☾"}</button>
+            <span className="hidden items-center gap-2 rounded border border-[#dfe4df] bg-[#f7f8f1] px-2.5 py-1.5 dark:border-[#374338] dark:bg-[#222c23] sm:flex"><i className="size-1.5 rounded-full bg-[#79945a]" />Workspace</span><span className="hidden text-[#828b80] dark:text-[#8e9b8b] sm:block">{new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date())}</span>
+          </div>
         </header>
         <section className="mx-auto w-full max-w-[1540px] flex-1 p-5 sm:p-8" key={active.id}>{content}</section>
-        <footer className="flex justify-between border-t border-[#dedfd4] px-5 py-3 text-[10px] text-[#92998e] sm:px-8"><span>Wareflow <b className="mx-1 text-[#c1c5b9]">·</b> Inventory operations, made clear.</span><span className="flex items-center gap-2">API connected <i className="size-1.5 rounded-full bg-[#79945a]" /></span></footer>
+        <footer className="flex justify-between border-t border-[#dedfd4] px-5 py-3 text-[10px] text-[#92998e] dark:border-[#303a30] dark:text-[#929f90] sm:px-8"><span>Wareflow <b className="mx-1 text-[#c1c5b9] dark:text-[#586559]">·</b> Inventory operations, made clear.</span><span className="flex items-center gap-2">API connected <i className="size-1.5 rounded-full bg-[#79945a]" /></span></footer>
       </main>
     </div>
   );

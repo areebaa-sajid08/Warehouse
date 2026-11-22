@@ -3,18 +3,18 @@ import { useEffect } from "react";
 export function PageHeader({ eyebrow, title, description, action }) {
   return <div className="mb-7 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
     <div>
-      <div className="mb-2 text-[10px] font-bold tracking-[0.18em] text-[#78866a]">{eyebrow}</div>
-      <h1 className="text-3xl font-semibold tracking-[-0.06em] text-[#202820] sm:text-4xl">{title}</h1>
-      <p className="mt-2 text-sm text-[#737d70]">{description}</p>
+      <div className="mb-2 text-[10px] font-bold tracking-[0.18em] text-[#78866a] dark:text-[#a7b69a]">{eyebrow}</div>
+      <h1 className="text-3xl font-semibold tracking-[-0.06em] text-[#202820] dark:text-[#e3e9de] sm:text-4xl">{title}</h1>
+      <p className="mt-2 text-sm text-[#737d70] dark:text-[#a0ad9d]">{description}</p>
     </div>
     {action && <div className="flex items-center">{action}</div>}
   </div>;
 }
 
 export function Panel({ title, subtitle, action, children, className = "" }) {
-  return <section className={`min-w-0 overflow-hidden rounded-xl border border-[#dedfd4] bg-[#fbfaf5] shadow-sm ${className}`}>
-    {(title || action) && <div className="flex flex-col justify-between gap-3 border-b border-[#e9e9e0] px-5 py-4 sm:flex-row sm:items-center">
-      <div>{title && <h2 className="text-sm font-semibold text-[#303e30]">{title}</h2>}{subtitle && <p className="mt-1 text-xs text-[#858e82]">{subtitle}</p>}</div>
+  return <section className={`min-w-0 overflow-hidden rounded-xl border border-[#dedfd4] bg-[#fbfaf5] shadow-sm dark:border-[#303a30] dark:bg-[#1a211b] ${className}`}>
+    {(title || action) && <div className="flex flex-col justify-between gap-3 border-b border-[#e9e9e0] px-5 py-4 dark:border-[#303a30] sm:flex-row sm:items-center">
+      <div>{title && <h2 className="text-sm font-semibold text-[#303e30] dark:text-[#e0e7dc]">{title}</h2>}{subtitle && <p className="mt-1 text-xs text-[#858e82] dark:text-[#9ba998]">{subtitle}</p>}</div>
       {action}
     </div>}
     {children}
@@ -23,7 +23,7 @@ export function Panel({ title, subtitle, action, children, className = "" }) {
 
 export function Button({ children, variant = "primary", className = "", ...props }) {
   const styles = variant === "secondary"
-    ? "border border-[#d6dacd] bg-[#fbfaf5] text-[#334132] hover:bg-[#eef0e7]"
+    ? "border border-[#d6dacd] bg-[#fbfaf5] text-[#334132] hover:bg-[#eef0e7] dark:border-[#465143] dark:bg-[#222b23] dark:text-[#dbe4d6] dark:hover:bg-[#2c362d]"
     : variant === "danger"
       ? "border border-[#a84d3e] bg-[#a84d3e] text-white hover:bg-[#873b30]"
       : "border border-[#1b261d] bg-[#1b261d] text-[#f8faef] hover:bg-[#344331]";
@@ -31,16 +31,16 @@ export function Button({ children, variant = "primary", className = "", ...props
 }
 
 export function Field({ label, className = "", ...props }) {
-  return <label className={`grid gap-1.5 text-xs font-semibold text-[#455141] ${className}`}>
+  return <label className={`grid gap-1.5 text-xs font-semibold text-[#455141] dark:text-[#c7d2c2] ${className}`}>
     <span>{label}</span>
-    <input className="h-10 w-full rounded-md border border-[#d8dacf] bg-[#fffefa] px-3 text-sm font-normal text-[#34443a] outline-none transition focus:border-[#80964f] focus:ring-4 focus:ring-[#8ea851]/15 placeholder:text-[#a6aa9f]" {...props} />
+    <input className="h-10 w-full rounded-md border border-[#d8dacf] bg-[#fffefa] px-3 text-sm font-normal text-[#34443a] outline-none transition focus:border-[#80964f] focus:ring-4 focus:ring-[#8ea851]/15 placeholder:text-[#a6aa9f] dark:border-[#465143] dark:bg-[#202820] dark:text-[#e0e7dc] dark:placeholder:text-[#788677]" {...props} />
   </label>;
 }
 
 export function SelectField({ label, options, className = "", ...props }) {
-  return <label className={`grid gap-1.5 text-xs font-semibold text-[#455141] ${className}`}>
+  return <label className={`grid gap-1.5 text-xs font-semibold text-[#455141] dark:text-[#c7d2c2] ${className}`}>
     <span>{label}</span>
-    <select className="h-10 w-full rounded-md border border-[#d8dacf] bg-[#fffefa] px-3 text-sm font-normal text-[#34443a] outline-none transition focus:border-[#80964f] focus:ring-4 focus:ring-[#8ea851]/15" {...props}>
+    <select className="h-10 w-full rounded-md border border-[#d8dacf] bg-[#fffefa] px-3 text-sm font-normal text-[#34443a] outline-none transition focus:border-[#80964f] focus:ring-4 focus:ring-[#8ea851]/15 dark:border-[#465143] dark:bg-[#202820] dark:text-[#e0e7dc]" {...props}>
       <option value="">Select {label.toLowerCase()}</option>
       {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
     </select>
@@ -50,17 +50,17 @@ export function SelectField({ label, options, className = "", ...props }) {
 export function Notice({ message, type = "error", onClose }) {
   if (!message) return null;
   const palette = type === "success"
-    ? "border-[#d5e1d3] bg-[#eaf1e9] text-[#3e7357]"
-    : "border-[#eed2c9] bg-[#f8ebe6] text-[#9d5144]";
+    ? "border-[#d5e1d3] bg-[#eaf1e9] text-[#3e7357] dark:border-[#3e5a44] dark:bg-[#243629] dark:text-[#b2d8af]"
+    : "border-[#eed2c9] bg-[#f8ebe6] text-[#9d5144] dark:border-[#67473e] dark:bg-[#382a27] dark:text-[#e3a79a]";
   return <div className={`mb-4 rounded-md border px-3 py-2.5 text-xs leading-relaxed ${palette}`} role="status">
     {message}{onClose && <button className="float-right ml-3 font-semibold" onClick={onClose} aria-label="Dismiss">×</button>}
   </div>;
 }
 
 export function EmptyState({ title = "Nothing here yet", children }) {
-  return <div className="flex min-h-40 flex-col items-center justify-center gap-2 px-5 py-8 text-center text-xs text-[#858e82]">
-    <span className="mb-1 grid size-10 place-items-center rounded-lg bg-[#edf1e9] text-lg text-[#5b775c]">◇</span>
-    <strong className="text-sm text-[#536256]">{title}</strong>
+  return <div className="flex min-h-40 flex-col items-center justify-center gap-2 px-5 py-8 text-center text-xs text-[#858e82] dark:text-[#9ba998]">
+    <span className="mb-1 grid size-10 place-items-center rounded-lg bg-[#edf1e9] text-lg text-[#5b775c] dark:bg-[#2b352b] dark:text-[#c4dd9d]">◇</span>
+    <strong className="text-sm text-[#536256] dark:text-[#c4d1c1]">{title}</strong>
     <span>{children}</span>
   </div>;
 }
@@ -72,10 +72,10 @@ export function Modal({ title, onClose, children }) {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
   return <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#111811]/60 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <section className="my-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-[#e3e3d9] bg-[#fbfaf5] p-5 shadow-2xl sm:p-7" role="dialog" aria-modal="true" aria-label={title}>
+    <section className="my-auto max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-[#e3e3d9] bg-[#fbfaf5] p-5 shadow-2xl dark:border-[#3c473b] dark:bg-[#1a211b] sm:p-7" role="dialog" aria-modal="true" aria-label={title}>
       <div className="mb-5 flex items-start justify-between gap-4">
-        <h2 className="text-lg font-semibold text-[#304137]">{title}</h2>
-        <button className="grid size-8 shrink-0 place-items-center rounded-md bg-[#f0f0e9] text-xl text-[#667366] hover:bg-[#e8e9df]" onClick={onClose} aria-label="Close">×</button>
+        <h2 className="text-lg font-semibold text-[#304137] dark:text-[#e0e7dc]">{title}</h2>
+        <button className="grid size-8 shrink-0 place-items-center rounded-md bg-[#f0f0e9] text-xl text-[#667366] hover:bg-[#e8e9df] dark:bg-[#2c362c] dark:text-[#b7c3b3] dark:hover:bg-[#384438]" onClick={onClose} aria-label="Close">×</button>
       </div>
       {children}
     </section>
@@ -91,9 +91,9 @@ export function LoadingState({ label = "Loading data" }) {
 export function StatusBadge({ children }) {
   const status = String(children).toLowerCase();
   const palette = status === "pending" ? "bg-[#f3eddd] text-[#85602e]"
-    : status === "processing" ? "bg-[#e8eee8] text-[#465e51]"
-      : status === "completed" || status === "approved" ? "bg-[#eaf1e9] text-[#496544]"
-        : status === "cancelled" || status === "rejected" ? "bg-[#f5e8e3] text-[#9c4e3e]"
-          : "bg-[#eff0e9] text-[#6d786c]";
+    : status === "processing" ? "bg-[#e8eee8] text-[#465e51] dark:bg-[#2a382d] dark:text-[#b7d0b6]"
+      : status === "completed" || status === "approved" ? "bg-[#eaf1e9] text-[#496544] dark:bg-[#26372a] dark:text-[#b2d8af]"
+        : status === "cancelled" || status === "rejected" ? "bg-[#f5e8e3] text-[#9c4e3e] dark:bg-[#3a2a27] dark:text-[#e3a79a]"
+          : "bg-[#eff0e9] text-[#6d786c] dark:bg-[#303830] dark:text-[#b3bdb0]";
   return <span className={`inline-flex whitespace-nowrap rounded px-2 py-1 text-[10px] font-bold ${palette}`}>{children}</span>;
 }

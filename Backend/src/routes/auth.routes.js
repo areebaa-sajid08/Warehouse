@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/users.model.js";
 import { authenticateToken } from "../middlewares/auth.middleware.js";
+import { publishActivityNotification } from "../services/activityNotifications.js";
 
 const router = express.Router();
 const publicRoles = ["warehouseManager", "supplier", "salesRepresentative"];
@@ -20,6 +21,7 @@ router.post("/register", async (req, res) => {
     }
     const user = await User.create({ username: email, name, email, password: await bcrypt.hash(password, 12), phone, role });
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    await publishActivityNotification({ actorId: user._id, title: "New account created", message: `${user.name} joined as ${user.role}.`, category: "account" });
     res.status(201).json({ message: "Registered successfully", token, user: await User.findById(user._id) });
   } catch (error) {
     if (error.code === 11000) {
@@ -40,6 +42,7 @@ router.post("/login", async (req, res) => {
     if (!user || !(await bcrypt.compare(password || "", user.password))) return res.status(401).json({ message: "Invalid email or password" });
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
     user.password = undefined;
+    await publishActivityNotification({ actorId: user._id, title: "User signed in", message: `${user.name} signed in.`, category: "account" });
     res.json({ message: "Login successful", token, user });
   } catch (error) { res.status(500).json({ message: error.message }); }
 });

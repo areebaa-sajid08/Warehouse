@@ -8,7 +8,9 @@ import Stock from "../models/stock.model.js";
 import StockTransaction from "../models/stockTransaction.model.js";
 import Order from "../models/order.model.js";
 import SupplyRequest from "../models/supplyRequest.model.js";
+import ActivityNotification from "../models/activityNotification.model.js";
 import { authenticateToken, authorize } from "../middlewares/auth.middleware.js";
+import { publishActivityNotification } from "../services/activityNotifications.js";
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -46,6 +48,7 @@ router.post("/users", authorize("admin"), async (req, res) => {
     if (!["admin", "warehouseManager", "supplier", "salesRepresentative"].includes(role)) return res.status(400).json({ message: "Invalid role" });
     if (await User.exists({ email: normalizedEmail })) return res.status(409).json({ message: "Email already registered" });
     const user = await User.create({ username: normalizedEmail, name, email: normalizedEmail, password: await bcrypt.hash(password, 12), phone, role, assignedWarehouses, image, imageFileId });
+    await publishActivityNotification({ actorId: req.user.id, title: "Team member added", message: `${name} was added as ${role}.`, category: "account" });
     res.status(201).json({ user: await User.findById(user._id).populate("assignedWarehouses") });
   } catch (error) {
     if (error.code === 11000) {
@@ -66,9 +69,25 @@ router.put("/users/me", async (req, res) => {
   }
   const user = await User.findByIdAndUpdate(req.user.id, allowed, { new: true, runValidators: true }).populate("assignedWarehouses");
   if (!user) return res.status(404).json({ message: "User not found" });
+  await publishActivityNotification({ actorId: req.user.id, title: "Profile updated", message: `${user.name} updated their profile.`, category: "account" });
   res.json({ user });
 });
 router.get("/users", authorize("admin"), async (req, res) => res.json({ users: await User.find().populate("assignedWarehouses").select("-password") }));
+router.get("/notifications", async (req, res) => {
+  const notifications = await ActivityNotification.find().sort({ createdAt: -1 }).limit(50).populate("actor", "name role");
+  const userId = String(req.user.id);
+  const items = notifications.map((notification) => {
+    const item = notification.toObject();
+    const read = notification.readBy.some((readerId) => String(readerId) === userId);
+    delete item.readBy;
+    return { ...item, read };
+  });
+  res.json({ notifications: items, unreadCount: items.filter((notification) => !notification.read).length });
+});
+router.patch("/notifications/read", async (req, res) => {
+  await ActivityNotification.updateMany({ readBy: { $ne: req.user.id } }, { $addToSet: { readBy: req.user.id } });
+  res.json({ message: "Notifications marked as read" });
+});
 router.put("/users/:id", authorize("admin"), async (req, res) => {
   const imageError = validateUserImage(req.body);
   if (imageError) return res.status(400).json({ message: imageError });
@@ -78,6 +97,7 @@ router.put("/users/:id", authorize("admin"), async (req, res) => {
     if (req.body.password) updates.password = await bcrypt.hash(req.body.password, 12);
     const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true }).populate("assignedWarehouses");
     if (!user) return res.status(404).json({ message: "User not found" });
+    await publishActivityNotification({ actorId: req.user.id, title: "Team member updated", message: `Account details for ${user.name} were updated.`, category: "account" });
     res.json({ user });
   } catch (error) { res.status(400).json({ message: error.message }); }
 });
@@ -85,14 +105,20 @@ router.delete("/users/:id", authorize("admin"), async (req, res) => {
   if (req.params.id.toLowerCase() === String(req.user.id).toLowerCase()) {
     return res.status(403).json({ message: "You cannot delete your own account" });
   }
-  if (!await User.findByIdAndDelete(req.params.id)) return res.status(404).json({ message: "User not found" });
+  const user = await User.findByIdAndDelete(req.params.id);
+  if (!user) return res.status(404).json({ message: "User not found" });
+  await publishActivityNotification({ actorId: req.user.id, title: "Team member removed", message: `${user.name}'s account was removed.`, category: "account" });
   res.json({ message: "User deleted" });
 });
 
 router.post("/products", authorize("admin", "warehouseManager"), async (req, res) => {
   const imageError = validateImagePayload(req.body);
   if (imageError) return res.status(400).json({ message: imageError });
-  try { res.status(201).json({ product: await Product.create({ ...req.body, createdBy: req.user.id }) }); }
+  try {
+    const product = await Product.create({ ...req.body, createdBy: req.user.id });
+    await publishActivityNotification({ actorId: req.user.id, title: "Product added", message: `${product.name} was added to the catalog.`, category: "catalog" });
+    res.status(201).json({ product });
+  }
   catch (error) { res.status(400).json({ message: error.message }); }
 });
 router.get("/products", async (req, res) => {
@@ -113,11 +139,14 @@ router.put("/products/:id", authorize("admin", "warehouseManager"), async (req, 
   if (imageError) return res.status(400).json({ message: imageError });
   const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
   if (!product) return res.status(404).json({ message: "Product not found" });
+  await publishActivityNotification({ actorId: req.user.id, title: "Product updated", message: `${product.name} was updated.`, category: "catalog" });
   res.json({ product });
 });
 router.delete("/products/:id", authorize("admin"), async (req, res) => {
   if (await Stock.exists({ product: req.params.id })) return res.status(409).json({ message: "Product has stock and cannot be deleted" });
-  if (!await Product.findByIdAndDelete(req.params.id)) return res.status(404).json({ message: "Product not found" });
+  const product = await Product.findByIdAndDelete(req.params.id);
+  if (!product) return res.status(404).json({ message: "Product not found" });
+  await publishActivityNotification({ actorId: req.user.id, title: "Product removed", message: `${product.name} was removed from the catalog.`, category: "catalog" });
   res.json({ message: "Product deleted" });
 });
 
@@ -125,6 +154,7 @@ router.post("/warehouses", authorize("admin"), async (req, res) => {
   try {
     const warehouse = await Warehouse.create(req.body);
     if (warehouse.manager) await User.findByIdAndUpdate(warehouse.manager, { $addToSet: { assignedWarehouses: warehouse._id } });
+    await publishActivityNotification({ actorId: req.user.id, title: "Warehouse added", message: `${warehouse.name} was added.`, category: "warehouse" });
     res.status(201).json({ warehouse });
   } catch (error) { res.status(400).json({ message: error.message }); }
 });
@@ -139,11 +169,14 @@ router.get("/warehouses", async (req, res) => {
 router.put("/warehouses/:id", authorize("admin"), async (req, res) => {
   const warehouse = await Warehouse.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
   if (!warehouse) return res.status(404).json({ message: "Warehouse not found" });
+  await publishActivityNotification({ actorId: req.user.id, title: "Warehouse updated", message: `${warehouse.name} was updated.`, category: "warehouse" });
   res.json({ warehouse });
 });
 router.delete("/warehouses/:id", authorize("admin"), async (req, res) => {
   if (await Stock.exists({ warehouse: req.params.id })) return res.status(409).json({ message: "Warehouse has inventory" });
-  if (!await Warehouse.findByIdAndDelete(req.params.id)) return res.status(404).json({ message: "Warehouse not found" });
+  const warehouse = await Warehouse.findByIdAndDelete(req.params.id);
+  if (!warehouse) return res.status(404).json({ message: "Warehouse not found" });
+  await publishActivityNotification({ actorId: req.user.id, title: "Warehouse removed", message: `${warehouse.name} was removed.`, category: "warehouse" });
   res.json({ message: "Warehouse deleted" });
 });
 
@@ -154,6 +187,7 @@ router.post("/stock/in", authorize("admin", "warehouseManager"), async (req, res
   if (!await canManageWarehouse(req, warehouse)) return res.status(403).json({ message: "Warehouse is not assigned to you" });
   const stock = await Stock.findOneAndUpdate({ product, warehouse }, { $inc: { quantity: qty } }, { new: true, upsert: true, setDefaultsOnInsert: true, runValidators: true });
   await StockTransaction.create({ product, warehouse, transactionType: "stock-in", quantity: qty, note, performedBy: req.user.id });
+  await publishActivityNotification({ actorId: req.user.id, title: "Stock received", message: `${qty} units were added to inventory.`, category: "inventory" });
   res.status(201).json({ stock });
 });
 router.post("/stock/out", authorize("admin", "warehouseManager"), async (req, res) => {
@@ -164,6 +198,7 @@ router.post("/stock/out", authorize("admin", "warehouseManager"), async (req, re
   const stock = await Stock.findOneAndUpdate({ product, warehouse, quantity: { $gte: qty } }, { $inc: { quantity: -qty } }, { new: true });
   if (!stock) return res.status(400).json({ message: "Insufficient stock" });
   await StockTransaction.create({ product, warehouse, transactionType: "stock-out", quantity: qty, note, performedBy: req.user.id });
+  await publishActivityNotification({ actorId: req.user.id, title: "Stock dispatched", message: `${qty} units were removed from inventory.`, category: "inventory" });
   res.json({ stock });
 });
 router.get("/stock", async (req, res) => {
@@ -215,6 +250,7 @@ router.post("/orders", authorize("salesRepresentative"), async (req, res) => {
       orderNumber: `ORD-${Date.now()}-${crypto.randomBytes(2).toString("hex").toUpperCase()}`,
       customerName, customerPhone, warehouse, products: lines, totalAmount, createdBy: req.user.id
     });
+    await publishActivityNotification({ actorId: req.user.id, title: "Order created", message: `Order ${order.orderNumber} was created.`, category: "order" });
     res.status(201).json({ order });
   } catch (error) { res.status(400).json({ message: error.message }); }
 });
@@ -253,6 +289,7 @@ router.put("/orders/:id/status", authorize("admin", "warehouseManager"), async (
   if (status === "Processing" && order.status === "Processing") return res.status(409).json({ message: "Order is already processing" });
   order.status = status;
   await order.save();
+  await publishActivityNotification({ actorId: req.user.id, title: "Order status changed", message: `Order ${order.orderNumber} is now ${status.toLowerCase()}.`, category: "order" });
   res.json({ order });
 });
 router.put("/orders/:id/cancel", authorize("salesRepresentative", "admin"), async (req, res) => {
@@ -262,11 +299,13 @@ router.put("/orders/:id/cancel", authorize("salesRepresentative", "admin"), asyn
   if (order.status !== "Pending") return res.status(409).json({ message: "Only pending orders can be cancelled" });
   order.status = "Cancelled";
   await order.save();
+  await publishActivityNotification({ actorId: req.user.id, title: "Order cancelled", message: `Order ${order.orderNumber} was cancelled.`, category: "order" });
   res.json({ order });
 });
 
 router.post("/supply-requests", authorize("supplier"), async (req, res) => {
   const request = await SupplyRequest.create({ ...req.body, supplier: req.user.id, status: "Pending" });
+  await publishActivityNotification({ actorId: req.user.id, title: "Supply request submitted", message: `A request for ${request.quantity} units was submitted.`, category: "supply" });
   res.status(201).json({ request });
 });
 router.get("/supply-requests", async (req, res) => {
@@ -286,6 +325,7 @@ router.put("/supply-requests/:id/status", authorize("admin", "warehouseManager")
     await Stock.findOneAndUpdate({ product: request.product, warehouse: request.warehouse }, { $inc: { quantity: request.quantity } }, { upsert: true, new: true, setDefaultsOnInsert: true });
     await StockTransaction.create({ product: request.product, warehouse: request.warehouse, transactionType: "stock-in", quantity: request.quantity, note: "Approved supply request", performedBy: req.user.id });
   }
+  await publishActivityNotification({ actorId: req.user.id, title: "Supply request reviewed", message: `A supply request was ${req.body.status.toLowerCase()}.`, category: "supply" });
   res.json({ request });
 });
 

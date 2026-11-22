@@ -40,7 +40,7 @@ export default function Inventory({ token }) {
 
   return <>
     <PageHeader eyebrow="STOCK CONTROL" title="Inventory" description="Track stock levels across your assigned warehouses." action={<div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => setDialog("out")}>− Stock out</Button><Button onClick={() => setDialog("in")}>＋ Stock in</Button></div>} />
-    {loadError && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-4 py-3 text-xs text-[#9d5144]">{loadError}</div>}
+    {loadError && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-4 py-3 text-xs text-[#9d5144] dark:border-[#67473e] dark:bg-[#382a27] dark:text-[#e3a79a]">{loadError}</div>}
     {loading ? <LoadingState /> : <>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <SummaryCard label="Tracked items" value={stocks.length} caption="Product / warehouse combinations" />
@@ -49,13 +49,13 @@ export default function Inventory({ token }) {
       </div>
       <Panel title="Stock on hand" subtitle={`${stocks.length} product and warehouse combinations`}>
         {stocks.length ? <div className="overflow-x-auto"><table className="w-full border-collapse text-left">
-          <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261]"><tr>{["Product", "SKU", "Warehouse", "On hand", "Reorder point", "Status"].map((item) => <th className="border-b border-[#e1e2d7] px-4 py-3 font-bold" key={item}>{item}</th>)}</tr></thead>
+          <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261] dark:bg-[#252e26] dark:text-[#aab8a4]"><tr>{["Product", "SKU", "Warehouse", "On hand", "Reorder point", "Status"].map((item) => <th className="border-b border-[#e1e2d7] px-4 py-3 font-bold dark:border-[#394339]" key={item}>{item}</th>)}</tr></thead>
           <tbody>{stocks.map((item) => {
             const low = item.product && item.quantity <= item.product.lowStockLimit;
-            return <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0]" key={item._id}>
-              <td className="px-4 py-3"><strong className="font-semibold text-[#3d4c41]">{item.product?.name || "Deleted product"}</strong><small className="mt-1 block text-[10px] text-[#929b90]">{item.product?.category || "—"}</small></td>
+            return <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0] dark:border-[#303a30] dark:text-[#aab8a4] dark:hover:bg-[#222a22]" key={item._id}>
+              <td className="px-4 py-3"><strong className="font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{item.product?.name || "Deleted product"}</strong><small className="mt-1 block text-[10px] text-[#929b90] dark:text-[#899789]">{item.product?.category || "—"}</small></td>
               <td className="px-4 py-3 font-mono">{item.product?.sku || "—"}</td><td className="px-4 py-3">{item.warehouse?.name || "Deleted warehouse"}</td>
-              <td className="px-4 py-3 font-bold tabular-nums text-[#34443a]">{item.quantity}</td><td className="px-4 py-3">{item.product?.lowStockLimit ?? "—"}</td>
+              <td className="px-4 py-3 font-bold tabular-nums text-[#34443a] dark:text-[#d0dacb]">{item.quantity}</td><td className="px-4 py-3">{item.product?.lowStockLimit ?? "—"}</td>
               <td className="px-4 py-3"><span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[10px] font-semibold ${low ? "text-[#b4743b]" : "text-[#4b7957]"}`}><i className={`size-1.5 rounded-full ${low ? "bg-[#d69a58]" : "bg-[#6a996d]"}`} />{low ? "Reorder" : "In stock"}</span></td>
             </tr>;
           })}</tbody>
@@ -64,7 +64,7 @@ export default function Inventory({ token }) {
     </>}
     {dialog && <Modal title={dialog === "in" ? "Receive stock" : "Record stock out"} onClose={() => setDialog("")}>
       <div className="mb-5 text-[10px] font-bold tracking-[.15em] text-[#78866a]">INVENTORY TRANSACTION</div>
-      {error && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-3 py-2.5 text-xs text-[#9d5144]">{error}</div>}
+      {error && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-3 py-2.5 text-xs text-[#9d5144] dark:border-[#67473e] dark:bg-[#382a27] dark:text-[#e3a79a]">{error}</div>}
       <form className="grid gap-4" onSubmit={submit}>
         <SelectField label="Product" value={form.product} onChange={change("product")} options={(data?.products || []).map((product) => ({ value: product._id, label: `${product.name} · ${product.sku}` }))} required />
         <SelectField label="Warehouse" value={form.warehouse} onChange={change("warehouse")} options={(data?.warehouses || []).map((warehouse) => ({ value: warehouse._id, label: warehouse.name }))} required />
@@ -77,5 +77,5 @@ export default function Inventory({ token }) {
 }
 
 function SummaryCard({ label, value, caption }) {
-  return <div className="grid gap-1 rounded-xl border border-[#dedfd4] bg-[#fbfaf5] p-4 shadow-sm"><span className="text-[10px] text-[#858e81]">{label}</span><b className="text-2xl font-semibold tracking-tight text-[#34443a]">{value}</b><small className="text-[10px] text-[#92998e]">{caption}</small></div>;
+  return <div className="grid gap-1 rounded-xl border border-[#dedfd4] bg-[#fbfaf5] p-4 shadow-sm dark:border-[#303a30] dark:bg-[#1a211b]"><span className="text-[10px] text-[#858e81] dark:text-[#9ba998]">{label}</span><b className="text-2xl font-semibold tracking-tight text-[#34443a] dark:text-[#d0dacb]">{value}</b><small className="text-[10px] text-[#92998e] dark:text-[#899789]">{caption}</small></div>;
 }
