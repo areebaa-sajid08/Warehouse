@@ -7,54 +7,74 @@ import { EmptyState, LoadingState, PageHeader, Panel, StatusBadge } from "./UI.j
 export default function Dashboard({ user, token, onNavigate }) {
   const load = useCallback(async () => {
     if (user.role === "admin") {
-      const [stats, warehouses, stock, products, orders] = await Promise.all([
+      const [stats, warehouses, stock, lowStock, products, orders] = await Promise.all([
         apiRequest("/dashboard/stats", { token }),
-        apiRequest("/warehouses", { token }),
-        apiRequest("/stock", { token }),
-        apiRequest("/products", { token }),
-        apiRequest("/orders", { token }),
+        apiRequest("/warehouses?limit=100", { token }),
+        apiRequest("/stock?limit=1", { token }),
+        apiRequest("/stock/low?limit=5", { token }),
+        apiRequest("/products?limit=5", { token }),
+        apiRequest("/orders?limit=5", { token }),
       ]);
-      return { stats, warehouses: warehouses.warehouses, stock: stock.stock, products: products.products, orders: orders.orders };
+      return {
+        stats,
+        warehouses: warehouses.warehouses,
+        stockSummary: stock.summary,
+        lowStock: lowStock.lowStock,
+        products: products.products,
+        productCount: products.pagination.total,
+        orders: orders.orders,
+        orderSummary: orders.statusSummary,
+      };
     }
     if (user.role === "warehouseManager") {
-      const [warehouses, stock, products, orders] = await Promise.all([
-        apiRequest("/warehouses", { token }),
-        apiRequest("/stock", { token }),
-        apiRequest("/products", { token }),
-        apiRequest("/orders", { token }),
+      const [warehouses, stock, lowStock, products, orders] = await Promise.all([
+        apiRequest("/warehouses?limit=100", { token }),
+        apiRequest("/stock?limit=1", { token }),
+        apiRequest("/stock/low?limit=5", { token }),
+        apiRequest("/products?limit=5", { token }),
+        apiRequest("/orders?limit=5", { token }),
       ]);
-      return { warehouses: warehouses.warehouses, stock: stock.stock, products: products.products, orders: orders.orders };
+      return {
+        warehouses: warehouses.warehouses,
+        stockSummary: stock.summary,
+        lowStock: lowStock.lowStock,
+        products: products.products,
+        productCount: products.pagination.total,
+        orders: orders.orders,
+        orderSummary: orders.statusSummary,
+      };
     }
     if (user.role === "salesRepresentative") {
       const [orders, products] = await Promise.all([
-        apiRequest("/orders", { token }),
-        apiRequest("/products", { token }),
+        apiRequest("/orders?limit=5", { token }),
+        apiRequest("/products?limit=5", { token }),
       ]);
-      return { orders: orders.orders, products: products.products };
+      return { orders: orders.orders, orderSummary: orders.statusSummary, productCount: products.pagination.total, products: products.products };
     }
     const [requests, products] = await Promise.all([
-      apiRequest("/supply-requests", { token }),
-      apiRequest("/products", { token }),
+      apiRequest("/supply-requests?limit=5", { token }),
+      apiRequest("/products?limit=5", { token }),
     ]);
-    return { requests: requests.requests, products: products.products };
+    return { requests: requests.requests, requestSummary: requests.statusSummary, productCount: products.pagination.total, products: products.products };
   }, [token, user.role]);
   const { data, loading, error } = useLoad(load);
 
-  const stock = data?.stock || [];
   const products = data?.products || [];
   const warehouses = data?.warehouses || [];
   const orders = data?.orders || [];
   const requests = data?.requests || [];
-  const lowStock = stock.filter((item) => item.product && item.quantity <= item.product.lowStockLimit);
-  const unitsOnHand = stock.reduce((total, item) => total + item.quantity, 0);
+  const lowStock = data?.lowStock || [];
+  const statusSummary = data?.orderSummary || {};
+  const requestSummary = data?.requestSummary || {};
+  const unitsOnHand = data?.stockSummary?.totalUnits || 0;
 
   const metrics = user.role === "admin"
-    ? [["Products", data?.stats?.products ?? 0, "In the live catalog", "◇"], ["Locations", warehouses.length, "Across your network", "▤"], ["Units on hand", unitsOnHand.toLocaleString(), "From recorded stock", "▥"], ["Reorder alerts", lowStock.length, "At or below reorder point", "↓"]]
+    ? [["Products", data?.stats?.products ?? 0, "In the live catalog", "◇"], ["Locations", data?.stats?.warehouses ?? 0, "Across your network", "▤"], ["Units on hand", unitsOnHand.toLocaleString(), "From recorded stock", "▥"], ["Reorder alerts", data?.stats?.lowStockProducts ?? 0, "At or below reorder point", "↓"]]
     : user.role === "warehouseManager"
-      ? [["My locations", warehouses.length, "Assigned warehouses", "▤"], ["Stock records", stock.length, "Product / location pairs", "▥"], ["Units on hand", unitsOnHand.toLocaleString(), "Across assigned sites", "▦"], ["Reorder alerts", lowStock.length, "Need a closer look", "↓"]]
+    ? [["My locations", warehouses.length, "Assigned warehouses", "▤"], ["Stock records", data?.stockSummary?.trackedItems ?? 0, "Product / location pairs", "▥"], ["Units on hand", unitsOnHand.toLocaleString(), "Across assigned sites", "▦"], ["Reorder alerts", data?.stockSummary?.lowStock ?? 0, "Need a closer look", "↓"]]
       : user.role === "salesRepresentative"
-        ? [["My orders", orders.length, "Created by your account", "⇄"], ["To process", orders.filter((item) => item.status === "Pending" || item.status === "Processing").length, "Pending or in progress", "◷"], ["Products", products.length, "In the live catalog", "◇"], ["Completed value", formatCurrency(orders.filter((item) => item.status === "Completed").reduce((sum, item) => sum + item.totalAmount, 0)), "From completed orders", "$"]]
-        : [["My requests", requests.length, "Submitted by your account", "↗"], ["Awaiting review", requests.filter((item) => item.status === "Pending").length, "Pending requests", "◷"], ["Approved", requests.filter((item) => item.status === "Approved").length, "Approved requests", "✓"], ["Products", products.length, "In the live catalog", "◇"]];
+      ? [["My orders", Object.values(statusSummary).reduce((sum, item) => sum + item.count, 0), "Created by your account", "⇄"], ["To process", (statusSummary.Pending?.count || 0) + (statusSummary.Processing?.count || 0), "Pending or in progress", "◷"], ["Products", data?.productCount || 0, "In the live catalog", "◇"], ["Completed value", formatCurrency(statusSummary.Completed?.value || 0), "From completed orders", "PKR"]]
+      : [["My requests", Object.values(requestSummary).reduce((sum, item) => sum + item.count, 0), "Submitted by your account", "↗"], ["Awaiting review", requestSummary.Pending?.count || 0, "Pending requests", "◷"], ["Approved", requestSummary.Approved?.count || 0, "Approved requests", "✓"], ["Products", data?.productCount || 0, "In the live catalog", "◇"]];
 
   return <>
     <PageHeader eyebrow="WAREHOUSE CONTROL ROOM" title={`Good ${getGreeting()}, ${user.name?.split(" ")[0] || "there"}.`} description="A live view of the records your team has put into the system." action={<span className="inline-flex items-center gap-2 rounded border border-[#dfe4d2] bg-[#f7f8ef] px-3 py-2 text-[9px] font-bold tracking-widest text-[#65764c] dark:border-[#45523c] dark:bg-[#252f23] dark:text-[#c4dd9d]"><i className="size-1.5 rounded-full bg-[#9abb56] ring-4 ring-[#dce8c7] dark:ring-[#3b4932]" />LIVE DATABASE</span>} />
@@ -69,8 +89,8 @@ export default function Dashboard({ user, token, onNavigate }) {
       </div>
 
       {["admin", "warehouseManager"].includes(user.role) ? <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Panel title="Warehouse floor" subtitle="On-hand quantities by location" action={<LinkButton onClick={() => onNavigate("inventory")}>Open inventory</LinkButton>} className="xl:col-span-2">
-          <WarehouseCapacity warehouses={warehouses} stock={stock} />
+        <Panel title="Warehouse floor" subtitle="Capacity utilization includes stock currently reserved for processing orders" action={<LinkButton onClick={() => onNavigate("inventory")}>Open inventory</LinkButton>} className="xl:col-span-2">
+          <WarehouseCapacity warehouses={warehouses} />
         </Panel>
         <Panel title="Reorder watch" subtitle="Items below their saved threshold" action={<LinkButton onClick={() => onNavigate("inventory")}>View stock</LinkButton>}>
           <LowStockList items={lowStock.slice(0, 5)} />
@@ -96,19 +116,19 @@ function LinkButton({ children, onClick }) {
   return <button className="text-[10px] font-bold text-[#4b6337] hover:text-[#263f26] hover:underline" onClick={onClick}>{children} <span className="text-[#7c9549]">→</span></button>;
 }
 
-function WarehouseCapacity({ warehouses, stock }) {
+function WarehouseCapacity({ warehouses }) {
   if (!warehouses.length) return <EmptyState title="No warehouse locations yet">Add a warehouse to see its stock position here.</EmptyState>;
   return <div className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2">
     {warehouses.map((warehouse) => {
-      const warehouseStock = stock.filter((item) => item.warehouse?._id === warehouse._id);
-      const units = warehouseStock.reduce((sum, item) => sum + item.quantity, 0);
-      const percentage = warehouse.capacity > 0 ? Math.min(100, Math.round(units / warehouse.capacity * 100)) : null;
+      const units = warehouse.usedCapacity || 0;
+      const capacity = Number(warehouse.capacity) || 0;
+      const percentage = capacity > 0 ? Math.min(100, Math.round(units / capacity * 100)) : 0;
       return <div className="flex min-w-0 items-center gap-3 rounded-lg border border-[#e6e7dc] bg-[#f7f7f0] p-3 dark:border-[#3b473b] dark:bg-[#222a22]" key={warehouse._id}>
         <span className="grid size-9 shrink-0 place-items-center rounded-md border border-[#dce2cb] bg-[#edf2e2] text-sm text-[#455e35] dark:border-[#465143] dark:bg-[#303b2e] dark:text-[#c4dd9d]">▤</span>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2"><strong className="truncate text-[11px] text-[#303e30] dark:text-[#d6dfd1]">{warehouse.name}</strong><span className="truncate text-[9px] text-[#838b7d] dark:text-[#899789]">{warehouse.location}</span></div>
           <div className="my-2 h-1 overflow-hidden rounded bg-[#e4e6d9] dark:bg-[#3b473b]"><span className="block h-full rounded bg-[#a4ca5d] transition-all" style={{ width: `${percentage ?? 0}%` }} /></div>
-          <small className="text-[9px] text-[#828b7d] dark:text-[#899789]">{percentage === null ? "Capacity not set" : `${percentage}% of ${warehouse.capacity.toLocaleString()} unit capacity`}</small>
+          <small className="text-[9px] text-[#828b7d] dark:text-[#899789]">{capacity ? `${percentage}% of ${capacity.toLocaleString()} unit capacity` : "No storage capacity available"}</small>
         </div>
         <div className="grid justify-items-end"><strong className="text-xs text-[#2e3c2e] dark:text-[#d6dfd1]">{units.toLocaleString()}</strong><small className="text-[9px] text-[#878f82] dark:text-[#899789]">units</small></div>
       </div>;
@@ -131,7 +151,7 @@ function LowStockList({ items }) {
 }
 
 function RecentProductList({ items }) {
-  const recent = [...items].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 5);
+  const recent = items.slice(0, 5);
   return <CompactList items={recent} emptyTitle="No products yet" emptyText="Products saved to the database will appear here." render={(product) =>
     <div className="flex min-h-16 items-center gap-3 border-t border-[#edede5] py-2 dark:border-[#303a30]" key={product._id}>
       {product.imageUrl ? <img className="size-9 shrink-0 rounded-md object-cover" src={product.imageUrl} alt="" /> : <span className="grid size-9 shrink-0 place-items-center rounded-md bg-[#edf1e9] text-xs font-bold uppercase text-[#4d6c53]">{product.name?.slice(0, 1) || "P"}</span>}

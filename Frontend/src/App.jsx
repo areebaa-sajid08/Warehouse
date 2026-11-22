@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import AuthScreen from "./components/AuthScreen.jsx";
 import Dashboard from "./components/Dashboard.jsx";
 import Inventory from "./components/Inventory.jsx";
+import Transactions from "./components/Transactions.jsx";
 import Catalog from "./components/Catalog.jsx";
 import Orders from "./components/Orders.jsx";
 import Supply from "./components/Supply.jsx";
 import NotificationCenter from "./components/NotificationCenter.jsx";
-import { confirmAction } from "./lib/alerts.js";
+import { confirmAction, showError } from "./lib/alerts.js";
+import { apiRequest } from "./lib/api.js";
 
 const navigation = [
   { id: "overview", label: "Overview", section: "Workspace", roles: ["admin", "warehouseManager", "salesRepresentative", "supplier"] },
   { id: "inventory", label: "Inventory", section: "Workspace", roles: ["admin", "warehouseManager"] },
+  { id: "transactions", label: "Transactions", section: "Workspace", roles: ["admin", "warehouseManager"] },
   { id: "products", label: "Products", section: "Workspace", roles: ["admin", "warehouseManager", "supplier", "salesRepresentative"] },
   { id: "warehouses", label: "Warehouses", section: "Workspace", roles: ["admin", "warehouseManager"] },
   { id: "orders", label: "Orders", section: "Operations", roles: ["admin", "warehouseManager", "salesRepresentative"] },
@@ -18,17 +22,7 @@ const navigation = [
   { id: "users", label: "Team", section: "Manage", roles: ["admin"] },
 ];
 
-const icons = { overview: "◫", inventory: "▦", products: "◇", warehouses: "▤", orders: "⇄", supply: "↗", users: "♙" };
-
-function getStoredSession() {
-  try {
-    const saved = localStorage.getItem("warehouse-session");
-    return saved ? JSON.parse(saved) : null;
-  } catch {
-    localStorage.removeItem("warehouse-session");
-    return null;
-  }
-}
+const icons = { overview: "◫", inventory: "▦", transactions: "↻", products: "◇", warehouses: "▤", orders: "⇄", supply: "↗", users: "♙" };
 
 function getStoredTheme() {
   try {
@@ -39,9 +33,12 @@ function getStoredTheme() {
 }
 
 export default function App() {
-  const [session, setSession] = useState(getStoredSession);
-  const [page, setPage] = useState("overview");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [session, setSession] = useState(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [theme, setTheme] = useState(getStoredTheme);
+  const requestedPage = location.pathname.replace(/^\/+|\/+$/g, "") || "overview";
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
@@ -53,33 +50,61 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    const signOutExpiredSession = () => setSession(null);
+    const signOutExpiredSession = () => {
+      try { localStorage.removeItem("warehouse-session"); } catch { /* Cookie auth does not depend on local storage. */ }
+      setSession(null);
+    };
     window.addEventListener("warehouse:unauthorized", signOutExpiredSession);
     return () => window.removeEventListener("warehouse:unauthorized", signOutExpiredSession);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    try { localStorage.removeItem("warehouse-session"); } catch { /* Cookie auth does not depend on local storage. */ }
+    apiRequest("/auth/me")
+      .then(({ user }) => { if (active) setSession({ user }); })
+      .catch(() => { if (active) setSession(null); })
+      .finally(() => { if (active) setSessionLoading(false); });
+    return () => { active = false; };
   }, []);
 
   const items = useMemo(
     () => navigation.filter((item) => session?.user && item.roles.includes(session.user.role)),
     [session],
   );
+  const active = items.find((item) => item.id === requestedPage) || items[0];
 
-  if (!session?.token || !session?.user) {
+  useEffect(() => {
+    if (session?.user && active && active.id !== requestedPage) navigate(`/${active.id}`, { replace: true });
+  }, [active, navigate, requestedPage, session]);
+
+  if (sessionLoading) {
+    return <div className="grid min-h-screen place-items-center bg-[#fbfaf5] dark:bg-[#111711]" aria-label="Loading session">
+      <span className="grid size-12 place-items-center rounded-md bg-[#c9ef6b] text-xl font-extrabold text-[#172019]">W</span>
+    </div>;
+  }
+
+  if (!session?.user) {
     return <AuthScreen onAuthenticated={(value) => {
-      localStorage.setItem("warehouse-session", JSON.stringify(value));
       setSession(value);
     }} theme={theme} onToggleTheme={() => setTheme((value) => value === "dark" ? "light" : "dark")} />;
   }
 
-  const active = items.find((item) => item.id === page) || items[0];
+  const navigateToPage = (pageId) => navigate(`/${pageId}`);
   const handleLogout = async () => {
     const result = await confirmAction({ title: "Sign out?", text: "You can sign back in at any time.", confirmText: "Sign out", icon: "question" });
     if (!result.isConfirmed) return;
-    localStorage.removeItem("warehouse-session");
-    setSession(null);
+    try {
+      await apiRequest("/auth/logout", { method: "POST" });
+      setSession(null);
+    } catch (error) {
+      await showError(error.message);
+    }
   };
   const content = {
-    overview: <Dashboard user={session.user} token={session.token} onNavigate={setPage} />,
-    inventory: <Inventory token={session.token} />,
+    overview: <Dashboard user={session.user} token={session.token} onNavigate={navigateToPage} />,
+    inventory: <Inventory token={session.token} onNavigate={navigateToPage} />,
+    transactions: <Transactions token={session.token} />,
     products: <Catalog type="products" token={session.token} user={session.user} />,
     warehouses: <Catalog type="warehouses" token={session.token} user={session.user} />,
     orders: <Orders token={session.token} user={session.user} />,
@@ -90,17 +115,17 @@ export default function App() {
   return (
     <div className="flex min-h-screen bg-[#eeeee7] text-[#202820] dark:bg-[#111711] dark:text-[#e1e7dc]">
       <aside className="flex w-full shrink-0 flex-col bg-[#171e18] px-4 pb-4 pt-5 text-white md:w-60 md:px-4 md:pt-7">
-        <a className="mb-4 flex items-center gap-3 md:mb-10" href="#" onClick={(event) => { event.preventDefault(); setPage("overview"); }}>
+        <button className="mb-4 flex items-center gap-3 text-left md:mb-10" type="button" onClick={() => navigateToPage("overview")}>
           <span className="grid size-10 place-items-center rounded-md bg-[#c9ef6b] text-lg font-extrabold text-[#172019]">W</span>
           <span className="grid gap-0.5"><strong className="text-base font-bold">Wareflow</strong><small className="text-[8px] font-semibold tracking-[.16em] text-[#a7b09d]">INVENTORY PLATFORM</small></span>
-        </a>
+        </button>
         <div className="mb-3 hidden px-3 text-[9px] font-bold tracking-[.18em] text-[#849080] md:block">YOUR WORKSPACE</div>
         <nav className="flex gap-1 overflow-x-auto pb-2 md:flex-1 md:flex-col md:gap-0 md:overflow-visible" aria-label="Main navigation">
           {["Workspace", "Operations", "Manage"].map((section) => {
             const links = items.filter((item) => item.section === section);
             return links.length ? <div className="md:mb-6" key={section}>
               <span className="mb-2 hidden px-3 text-[10px] font-semibold text-[#91a294] md:block">{section}</span>
-              <div className="flex gap-1 md:flex-col">{links.map((item) => <button key={item.id} className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs font-medium transition hover:bg-white/10 md:w-full md:gap-3 ${page === item.id ? "bg-[#c9ef6b]/10 text-[#d7f78b] md:shadow-[inset_2px_0_#c9ef6b]" : "text-[#b8c0b1]"}`} onClick={() => setPage(item.id)}>
+              <div className="flex gap-1 md:flex-col">{links.map((item) => <button key={item.id} className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs font-medium transition hover:bg-white/10 md:w-full md:gap-3 ${active.id === item.id ? "bg-[#c9ef6b]/10 text-[#d7f78b] md:shadow-[inset_2px_0_#c9ef6b]" : "text-[#b8c0b1]"}`} onClick={() => navigateToPage(item.id)}>
                 <span className="grid w-4 place-items-center text-sm">{icons[item.id]}</span><span>{item.label}</span>
               </button>)}</div>
             </div> : null;

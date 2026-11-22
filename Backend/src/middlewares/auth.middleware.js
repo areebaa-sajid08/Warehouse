@@ -1,15 +1,25 @@
 import jwt from "jsonwebtoken";
+import User from "../models/users.model.js";
 
-export function authenticateToken(req, res, next) {
+export async function authenticateToken(req, res, next) {
   const header = req.headers.authorization;
   const token = (header?.startsWith("Bearer ") && header.slice(7)) || req.cookies?.token;
   if (!token) return res.status(401).json({ message: "Authentication required" });
 
+  let claims;
   try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
-    next();
+    claims = jwt.verify(token, process.env.JWT_SECRET);
   } catch {
-    res.status(401).json({ message: "Invalid or expired token" });
+    return res.status(401).json({ message: "Invalid or expired session" });
+  }
+
+  try {
+    const user = await User.findById(claims.id).select("role");
+    if (!user) return res.status(401).json({ message: "Invalid or expired session" });
+    req.user = { id: user._id.toString(), role: user.role };
+    return next();
+  } catch (error) {
+    return next(error);
   }
 }
 

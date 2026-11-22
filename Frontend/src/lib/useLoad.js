@@ -15,7 +15,13 @@ export function useLoad(loader) {
 
   useEffect(() => {
     let active = true;
-    Promise.resolve().then(loader).then((value) => {
+    Promise.resolve().then(() => {
+      if (active) {
+        setLoading(true);
+        setError("");
+      }
+      return loader();
+    }).then((value) => {
       if (active) setData(value);
     }).catch((err) => {
       if (active) setError(err.message || "Unable to load data");

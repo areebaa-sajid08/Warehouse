@@ -97,3 +97,19 @@ export function StatusBadge({ children }) {
           : "bg-[#eff0e9] text-[#6d786c] dark:bg-[#303830] dark:text-[#b3bdb0]";
   return <span className={`inline-flex whitespace-nowrap rounded px-2 py-1 text-[10px] font-bold ${palette}`}>{children}</span>;
 }
+
+export function Pagination({ page, pageSize, total, onChange }) {
+  const pageCount = Math.ceil(total / pageSize);
+  if (pageCount <= 1) return null;
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+  const buttonClass = "rounded-md border border-[#d6dacd] bg-[#fbfaf5] px-3 py-2 text-[10px] font-semibold text-[#334132] hover:bg-[#eef0e7] disabled:cursor-not-allowed disabled:opacity-40 dark:border-[#465143] dark:bg-[#222b23] dark:text-[#dbe4d6] dark:hover:bg-[#2c362d]";
+  return <div className="flex items-center justify-between gap-3 border-t border-[#e9e9e0] px-4 py-3 dark:border-[#303a30]">
+    <span className="text-[10px] text-[#858e82] dark:text-[#9ba998]">Showing {start}–{end} of {total}</span>
+    <div className="flex items-center gap-2">
+      <button className={buttonClass} type="button" disabled={page <= 1} onClick={() => onChange(page - 1)}>Previous</button>
+      <span className="text-[10px] text-[#667261] dark:text-[#aab8a4]">{page} / {pageCount}</span>
+      <button className={buttonClass} type="button" disabled={page >= pageCount} onClick={() => onChange(page + 1)}>Next</button>
+    </div>
+  </div>;
+}

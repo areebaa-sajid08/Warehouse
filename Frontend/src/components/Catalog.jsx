@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { apiRequest } from "../lib/api.js";
+import { apiRequest, queryString } from "../lib/api.js";
 import { confirmAction, showError, showSuccess } from "../lib/alerts.js";
 import { uploadProductImage, validateProductImage } from "../lib/imageUpload.js";
 import { useLoad } from "../lib/useLoad.js";
 import { formatCurrency } from "../lib/format.js";
-import { Button, EmptyState, Field, LoadingState, Modal, PageHeader, Panel, SelectField } from "./UI.jsx";
+import { Button, EmptyState, Field, LoadingState, Modal, PageHeader, Pagination, Panel, SelectField } from "./UI.jsx";
 
 const config = {
   products: { title: "Products", eyebrow: "CATALOG", description: "Manage the products and pricing in your inventory.", endpoint: "/products", createRoles: ["admin", "warehouseManager"] },
@@ -13,6 +13,7 @@ const config = {
 };
 
 const emptyList = [];
+const PAGE_SIZE = 25;
 const roles = [
   { value: "admin", label: "Administrator" },
   { value: "warehouseManager", label: "Warehouse manager" },
@@ -29,33 +30,43 @@ export default function Catalog({ type, token, user }) {
   const [form, setForm] = useState({});
   const [editingId, setEditingId] = useState("");
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const query = queryString({
+    page,
+    limit: PAGE_SIZE,
+    search,
+    category: categoryFilter,
+    includeArchived: type === "products" && user.role === "admin" ? "true" : undefined,
+  });
   const load = useCallback(async () => {
-    const result = await apiRequest(definition.endpoint, { token });
-    if (type === "warehouses") {
-      const users = user.role === "admin" ? (await apiRequest("/users", { token })).users || [] : [];
-      return {
-        records: result.warehouses || [],
-        managers: users.filter((item) => item.role === "warehouseManager"),
-      };
-    }
-    return result[type] || [];
-  }, [definition.endpoint, token, type, user.role]);
+    const [result, managersResult, suppliersResult] = await Promise.all([
+      apiRequest(`${definition.endpoint}${query}`, { token }),
+      type === "warehouses" && user.role === "admin"
+        ? apiRequest("/users?role=warehouseManager&limit=100", { token })
+        : Promise.resolve({ users: [] }),
+      type === "products" && definition.createRoles.includes(user.role)
+        ? apiRequest("/suppliers?limit=100", { token })
+        : Promise.resolve({ suppliers: [] }),
+    ]);
+    return {
+      records: result[type] || [],
+      pagination: result.pagination,
+      categories: result.categories || [],
+      managers: managersResult.users || [],
+      suppliers: suppliersResult.suppliers || [],
+    };
+  }, [definition.createRoles, definition.endpoint, query, token, type, user.role]);
   const { data: loadedData, loading, error, reload } = useLoad(load);
-  const data = Array.isArray(loadedData) ? loadedData : loadedData?.records || emptyList;
-  const managers = Array.isArray(loadedData) ? emptyList : loadedData?.managers || emptyList;
+  const data = loadedData?.records || emptyList;
+  const managers = loadedData?.managers || emptyList;
+  const suppliers = loadedData?.suppliers || emptyList;
+  const total = loadedData?.pagination?.total || 0;
+  const pageCount = Math.max(1, loadedData?.pagination?.pages || 1);
+  const currentPage = Math.min(page, pageCount);
   const canCreate = definition.createRoles.includes(user.role);
-  const filteredData = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return data;
-    return data.filter((item) => {
-      const values = type === "products"
-        ? [item.name, item.sku, item.category, item.description, item.supplier?.name]
-        : type === "warehouses"
-          ? [item.name, item.location, item.manager?.name]
-          : [item.name, item.email, item.role];
-      return values.some((value) => String(value || "").toLowerCase().includes(term));
-    });
-  }, [data, search, type]);
+  const pageData = data;
+  const categories = loadedData?.categories || emptyList;
   const change = (key) => (event) => setForm((value) => ({ ...value, [key]: event.target.value }));
   const previewUrl = useMemo(() => form.imageFile ? URL.createObjectURL(form.imageFile) : "", [form.imageFile]);
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
@@ -86,7 +97,7 @@ export default function Catalog({ type, token, user }) {
       let body;
       if (type === "products") {
         const { imageFile, ...fields } = form;
-        body = { ...fields, price: Number(form.price), lowStockLimit: Number(form.lowStockLimit) };
+        body = { ...fields, supplier: form.supplier || null, price: Number(form.price), lowStockLimit: Number(form.lowStockLimit) };
         if (imageFile) Object.assign(body, await uploadProductImage(imageFile, token));
       } else if (type === "warehouses") {
         body = { ...form, capacity: Number(form.capacity) };
@@ -123,38 +134,59 @@ export default function Catalog({ type, token, user }) {
 
   const remove = async (item) => {
     const label = item.name || item.email || "this record";
-    const confirmation = await confirmAction({ title: `Delete ${label}?`, text: "This action cannot be undone.", confirmText: "Delete", icon: "warning" });
+    const isProduct = type === "products";
+    const confirmation = await confirmAction({
+      title: `${isProduct ? "Archive" : "Delete"} ${label}?`,
+      text: isProduct ? "The product will be hidden from the active catalog; existing order and supply history will be preserved." : "This action cannot be undone.",
+      confirmText: isProduct ? "Archive" : "Delete",
+      icon: "warning",
+    });
     if (!confirmation.isConfirmed) return;
     try {
       await apiRequest(`${definition.endpoint}/${item._id}`, { token, method: "DELETE" });
       await reload();
-      await showSuccess("Record deleted");
+      await showSuccess(isProduct ? "Product archived" : "Record deleted");
+    } catch (err) { await showError(err.message); }
+  };
+
+  const restore = async (item) => {
+    try {
+      await apiRequest(`${definition.endpoint}/${item._id}/restore`, { token, method: "POST" });
+      await reload();
+      await showSuccess("Product restored");
     } catch (err) { await showError(err.message); }
   };
 
   return <>
     <PageHeader eyebrow={definition.eyebrow} title={definition.title} description={definition.description} action={canCreate && <Button onClick={openNew}>＋ {type === "products" ? "Add product" : type === "warehouses" ? "Add warehouse" : "Add team member"}</Button>} />
     {error && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-4 py-3 text-xs text-[#9d5144] dark:border-[#67473e] dark:bg-[#382a27] dark:text-[#e3a79a]">{error}</div>}
-    {loading ? <LoadingState /> : <Panel title={`All ${definition.title.toLowerCase()}`} subtitle={`${filteredData.length} of ${data.length} records`} action={<label className="flex w-full items-center gap-2 rounded-md border border-[#dfe1d6] bg-[#fffefa] px-3 text-[#78866a] focus-within:ring-4 focus-within:ring-[#9ab75c]/15 dark:border-[#465143] dark:bg-[#202820] dark:text-[#a7b69a] sm:w-64"><span className="text-base">⌕</span><input className="h-9 w-full min-w-0 bg-transparent text-xs text-[#344132] outline-none placeholder:text-[#939b8e] dark:text-[#e0e7dc] dark:placeholder:text-[#788677]" type="search" placeholder={`Search ${definition.title.toLowerCase()}`} value={search} onChange={(event) => setSearch(event.target.value)} /></label>}>
-      {!filteredData.length ? <EmptyState title={data.length ? "No matching records" : `No ${definition.title.toLowerCase()} yet`}>{data.length ? "Try a different search term." : canCreate ? "Add your first record to get started." : "Records will appear here when available."}</EmptyState> : <div className="overflow-x-auto"><table className="w-full border-collapse text-left">
+    {loading ? <LoadingState /> : <Panel title={`All ${definition.title.toLowerCase()}`} subtitle={`Showing ${data.length} of ${total} records`} action={<div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+      {type === "products" && <select className="h-9 rounded-md border border-[#dfe1d6] bg-[#fffefa] px-3 text-xs text-[#344132] outline-none dark:border-[#465143] dark:bg-[#202820] dark:text-[#e0e7dc]" aria-label="Filter products by category" value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(1); }}><option value="">All categories</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select>}
+      <label className="flex w-full items-center gap-2 rounded-md border border-[#dfe1d6] bg-[#fffefa] px-3 text-[#78866a] focus-within:ring-4 focus-within:ring-[#9ab75c]/15 dark:border-[#465143] dark:bg-[#202820] dark:text-[#a7b69a] sm:w-64"><span className="text-base">⌕</span><input className="h-9 w-full min-w-0 bg-transparent text-xs text-[#344132] outline-none placeholder:text-[#939b8e] dark:text-[#e0e7dc] dark:placeholder:text-[#788677]" type="search" placeholder={`Search ${definition.title.toLowerCase()}`} value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></label>
+    </div>}>
+      {!data.length ? <EmptyState title={total ? "No records on this page" : `No ${definition.title.toLowerCase()} found`}>{total ? "Choose another page." : canCreate ? "Add your first record to get started." : "Records will appear here when available."}</EmptyState> : <div className="overflow-x-auto"><table className="w-full border-collapse text-left">
         {type === "products" ? <>
-          <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261] dark:bg-[#252e26] dark:text-[#aab8a4]"><tr>{["Product", "SKU", "Category", "Price", "Reorder point", "Supplier", ...(canCreate ? [""] : [])].map((item, index) => <th className="whitespace-nowrap border-b border-[#e1e2d7] px-4 py-3 font-bold dark:border-[#394339]" key={`${item}-${index}`}>{item}</th>)}</tr></thead>
-          <tbody>{filteredData.map((item) => <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0] dark:border-[#303a30] dark:text-[#aab8a4] dark:hover:bg-[#222a22]" key={item._id}>
+          <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261] dark:bg-[#252e26] dark:text-[#aab8a4]"><tr>{["Product", "SKU", "Category", "Price", "Reorder point", "Supplier", "Status", ...(user.role === "admin" ? [""] : [])].map((item, index) => <th className="whitespace-nowrap border-b border-[#e1e2d7] px-4 py-3 font-bold dark:border-[#394339]" key={`${item}-${index}`}>{item}</th>)}</tr></thead>
+          <tbody>{pageData.map((item) => <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0] dark:border-[#303a30] dark:text-[#aab8a4] dark:hover:bg-[#222a22]" key={item._id}>
             <td className="px-4 py-3"><div className="flex min-w-40 items-center gap-3">{item.imageUrl ? <img className="size-9 shrink-0 rounded-md bg-[#edf1e9] object-cover dark:bg-[#2b352b]" src={item.imageUrl} alt="" /> : <span className="grid size-9 shrink-0 place-items-center rounded-md bg-[#edf1e9] text-xs font-bold uppercase text-[#31432d] dark:bg-[#2b352b] dark:text-[#c4dd9d]">{item.name?.slice(0, 1)}</span>}<span className="min-w-0"><strong className="block truncate font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{item.name}</strong><small className="mt-1 block max-w-48 truncate text-[10px] text-[#929b90] dark:text-[#899789]">{item.description || "No description"}</small></span></div></td>
             <td className="px-4 py-3 font-mono">{item.sku}</td><td className="px-4 py-3">{item.category || "—"}</td><td className="px-4 py-3 font-bold text-[#34443a] dark:text-[#d0dacb]">{formatCurrency(item.price)}</td><td className="px-4 py-3">{item.lowStockLimit}</td><td className="px-4 py-3">{item.supplier?.name || "—"}</td>
-            {canCreate && <td className="px-4 py-3"><button className="text-[10px] font-bold text-[#b96050] hover:underline" onClick={() => remove(item)} title="Delete product">Delete</button></td>}
+            <td className="px-4 py-3">{item.archivedAt ? <span className="rounded bg-[#f5e8e3] px-2 py-1 text-[10px] font-bold text-[#9c4e3e]">Archived</span> : <span className="rounded bg-[#eaf1e9] px-2 py-1 text-[10px] font-bold text-[#496544]">Active</span>}</td>
+            {user.role === "admin" && <td className="px-4 py-3">{item.archivedAt
+              ? <button className="text-[10px] font-bold text-[#4b6337] hover:underline dark:text-[#c4dd9d]" onClick={() => restore(item)}>Restore</button>
+              : <button className="text-[10px] font-bold text-[#b96050] hover:underline" onClick={() => remove(item)}>Archive</button>}</td>}
           </tr>)}</tbody>
         </> : type === "warehouses" ? <>
           <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261] dark:bg-[#252e26] dark:text-[#aab8a4]"><tr>{["Warehouse", "Location", "Manager", "Capacity", ...(user.role === "admin" ? [""] : [])].map((item, index) => <th className="whitespace-nowrap border-b border-[#e1e2d7] px-4 py-3 font-bold dark:border-[#394339]" key={`${item}-${index}`}>{item}</th>)}</tr></thead>
-          <tbody>{filteredData.map((item) => <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0] dark:border-[#303a30] dark:text-[#aab8a4] dark:hover:bg-[#222a22]" key={item._id}><td className="px-4 py-3"><div className="flex min-w-40 items-center gap-3"><span className="grid size-9 place-items-center rounded-md bg-[#edf1e9] text-sm text-[#557357] dark:bg-[#2b352b] dark:text-[#c4dd9d]">▤</span><strong className="font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{item.name}</strong></div></td><td className="px-4 py-3">{item.location}</td><td className="px-4 py-3">{item.manager?.name || "Unassigned"}</td><td className="px-4 py-3">{Number(item.capacity).toLocaleString()} units</td>{user.role === "admin" && <td className="px-4 py-3"><div className="flex items-center gap-3"><button className="text-[10px] font-bold text-[#4b6337] hover:underline dark:text-[#c4dd9d]" onClick={() => editWarehouse(item)}>Edit</button><button className="text-[10px] font-bold text-[#b96050] hover:underline" onClick={() => remove(item)}>Delete</button></div></td>}</tr>)}</tbody>
+          <tbody>{pageData.map((item) => <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0] dark:border-[#303a30] dark:text-[#aab8a4] dark:hover:bg-[#222a22]" key={item._id}><td className="px-4 py-3"><div className="flex min-w-40 items-center gap-3"><span className="grid size-9 place-items-center rounded-md bg-[#edf1e9] text-sm text-[#557357] dark:bg-[#2b352b] dark:text-[#c4dd9d]">▤</span><strong className="font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{item.name}</strong></div></td><td className="px-4 py-3">{item.location}</td><td className="px-4 py-3">{item.manager?.name || "Unassigned"}</td><td className="px-4 py-3">{(item.usedCapacity || 0).toLocaleString()} / {Number(item.capacity).toLocaleString()} units</td>{user.role === "admin" && <td className="px-4 py-3"><div className="flex items-center gap-3"><button className="text-[10px] font-bold text-[#4b6337] hover:underline dark:text-[#c4dd9d]" onClick={() => editWarehouse(item)}>Edit</button><button className="text-[10px] font-bold text-[#b96050] hover:underline" onClick={() => remove(item)}>Delete</button></div></td>}</tr>)}</tbody>
         </> : <>
           <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261] dark:bg-[#252e26] dark:text-[#aab8a4]"><tr>{["Member", "Email", "Role", "Warehouses", "Joined", ""].map((item, index) => <th className="whitespace-nowrap border-b border-[#e1e2d7] px-4 py-3 font-bold dark:border-[#394339]" key={`${item}-${index}`}>{item}</th>)}</tr></thead>
-          <tbody>{filteredData.map((item) => {
+          <tbody>{pageData.map((item) => {
             const isCurrentUser = String(item._id) === String(user._id || user.id);
             return <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0] dark:border-[#303a30] dark:text-[#aab8a4] dark:hover:bg-[#222a22]" key={item._id}><td className="px-4 py-3"><div className="flex min-w-36 items-center gap-3"><span className="grid size-8 shrink-0 place-items-center rounded-md bg-[#d9e3d6] text-xs font-bold text-[#203d32] dark:bg-[#2b352b] dark:text-[#c4dd9d]">{(item.name || item.email).slice(0, 1).toUpperCase()}</span><strong className="font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{item.name}{isCurrentUser && <span className="ml-2 rounded bg-[#edf2e3] px-1.5 py-1 text-[9px] font-semibold text-[#3e5736] dark:bg-[#35432f] dark:text-[#c4dd9d]">You</span>}</strong></div></td><td className="px-4 py-3">{item.email}</td><td className="px-4 py-3"><span className="rounded bg-[#edf2e3] px-2 py-1 text-[10px] text-[#3e5736] dark:bg-[#35432f] dark:text-[#c4dd9d]">{roleLabel(item.role)}</span></td><td className="px-4 py-3">{item.assignedWarehouses?.length || "—"}</td><td className="px-4 py-3">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "—"}</td><td className="px-4 py-3">{isCurrentUser ? <span className="text-[10px] text-[#929b90] dark:text-[#899789]" title="You cannot delete your own account">Current account</span> : <button className="text-[10px] font-bold text-[#b96050] hover:underline" onClick={() => remove(item)}>Delete</button>}</td></tr>;
           })}</tbody>
         </>}
       </table></div>}
+      <Pagination page={currentPage} pageSize={PAGE_SIZE} total={total} onChange={setPage} />
     </Panel>}
     {dialog && <Modal title={type === "products" ? "Add a product" : type === "warehouses" ? `${editingId ? "Edit" : "Add"} a warehouse` : "Add a team member"} onClose={closeDialog}>
       {formError && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-3 py-2.5 text-xs text-[#9d5144] dark:border-[#67473e] dark:bg-[#382a27] dark:text-[#e3a79a]">{formError}</div>}
@@ -164,6 +196,7 @@ export default function Catalog({ type, token, user }) {
           <div className="grid gap-3 sm:grid-cols-2"><Field label="SKU" value={form.sku || ""} onChange={change("sku")} required /><Field label="Category" value={form.category || ""} onChange={change("category")} /></div>
           <div className="grid gap-3 sm:grid-cols-2"><Field label="Price" type="number" min="0" step="0.01" value={form.price || ""} onChange={change("price")} required /><Field label="Reorder point" type="number" min="0" step="1" value={form.lowStockLimit || ""} onChange={change("lowStockLimit")} required /></div>
           <Field label="Description" value={form.description || ""} onChange={change("description")} />
+          <SelectField label="Supplier (optional)" value={form.supplier || ""} onChange={change("supplier")} options={suppliers.map((supplier) => ({ value: supplier._id, label: `${supplier.name} · ${supplier.email}` }))} />
           <label className="grid gap-1.5 text-xs font-semibold text-[#455141] dark:text-[#c7d2c2]"><span>Product image <small className="ml-1 font-normal text-[#999f94] dark:text-[#899789]">Optional</small></span><input className="w-full rounded-md border border-[#d8dacf] bg-[#fffefa] p-2 text-xs dark:border-[#465143] dark:bg-[#202820] dark:text-[#e0e7dc]" type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseImage} /><small className="text-[10px] font-normal text-[#92998e] dark:text-[#899789]">JPEG, PNG, or WEBP · max 5 MB · requires backend ImageKit credentials.</small></label>
           {previewUrl && <div className="flex items-center gap-3 rounded-md border border-[#e3e3d9] bg-[#faf9f3] p-2 dark:border-[#3c473b] dark:bg-[#202820]"><img className="size-11 rounded object-cover" src={previewUrl} alt="Product preview" /><span className="min-w-0 flex-1 truncate text-xs text-[#707d71] dark:text-[#aab8a4]">{form.imageFile.name}</span><button type="button" className="text-[10px] font-bold text-[#b96050]" onClick={() => setForm((value) => ({ ...value, imageFile: null }))}>Remove</button></div>}
         </> : type === "warehouses" ? <>

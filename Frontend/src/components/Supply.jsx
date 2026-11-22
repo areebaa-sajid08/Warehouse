@@ -1,24 +1,34 @@
 import { useCallback, useState } from "react";
-import { apiRequest } from "../lib/api.js";
+import { apiRequest, queryString } from "../lib/api.js";
 import { confirmAction, showError, showSuccess } from "../lib/alerts.js";
 import { useLoad } from "../lib/useLoad.js";
-import { Button, EmptyState, Field, LoadingState, Modal, PageHeader, Panel, SelectField, StatusBadge } from "./UI.jsx";
+import { Button, EmptyState, Field, LoadingState, Modal, PageHeader, Pagination, Panel, SelectField, StatusBadge } from "./UI.jsx";
 
 const initialForm = { product: "", warehouse: "", quantity: "" };
+const PAGE_SIZE = 25;
 
 export default function Supply({ token, user }) {
   const [dialog, setDialog] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState(initialForm);
+  const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const query = queryString({ page, limit: PAGE_SIZE, status: statusFilter === "all" ? "" : statusFilter });
   const load = useCallback(async () => {
     const [requests, products, warehouses] = await Promise.all([
-      apiRequest("/supply-requests", { token }),
-      apiRequest("/products", { token }),
-      apiRequest("/warehouses", { token }),
+      apiRequest(`/supply-requests${query}`, { token }),
+      apiRequest("/products?limit=100", { token }),
+      apiRequest("/warehouses?limit=100", { token }),
     ]);
-    return { requests: requests.requests, products: products.products, warehouses: warehouses.warehouses };
-  }, [token]);
+    return {
+      requests: requests.requests,
+      pagination: requests.pagination,
+      statusSummary: requests.statusSummary,
+      products: products.products,
+      warehouses: warehouses.warehouses,
+    };
+  }, [query, token]);
   const { data, loading, error: loadError, reload } = useLoad(load);
   const isSupplier = user.role === "supplier";
   const change = (key) => (event) => setForm((value) => ({ ...value, [key]: event.target.value }));
@@ -54,19 +64,23 @@ export default function Supply({ token, user }) {
     } catch (err) { await showError(err.message); }
   };
   const requests = data?.requests || [];
+  const pagination = data?.pagination || { page: 1, total: 0, pages: 1 };
+  const pageCount = Math.max(1, pagination.pages || 1);
+  const currentPage = Math.min(page, pageCount);
   const summaries = [
-    ["Total requests", requests.length],
-    ["Pending", requests.filter((item) => item.status === "Pending").length],
-    ["Approved", requests.filter((item) => item.status === "Approved").length],
-    ["Rejected", requests.filter((item) => item.status === "Rejected").length],
+    ["Total requests", Object.values(data?.statusSummary || {}).reduce((sum, item) => sum + item.count, 0)],
+    ["Pending", data?.statusSummary?.Pending?.count || 0],
+    ["Approved", data?.statusSummary?.Approved?.count || 0],
+    ["Rejected", data?.statusSummary?.Rejected?.count || 0],
   ];
 
   return <>
     <PageHeader eyebrow="SUPPLIER OPERATIONS" title={isSupplier ? "My supply requests" : "Supply requests"} description={isSupplier ? "Request replenishment and track your approvals." : "Review incoming requests and replenish warehouse stock."} action={isSupplier && <Button onClick={() => { setError(""); setDialog(true); }}>＋ New request</Button>} />
     {loadError && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-4 py-3 text-xs text-[#9d5144] dark:border-[#67473e] dark:bg-[#382a27] dark:text-[#e3a79a]">{loadError}</div>}
     <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">{summaries.map(([label, value]) => <div key={label} className="grid gap-1 rounded-xl border border-[#dedfd4] bg-[#fbfaf5] p-3 shadow-sm dark:border-[#303a30] dark:bg-[#1a211b] sm:p-4"><span className="text-[10px] text-[#858e81] dark:text-[#9ba998]">{label}</span><b className="text-2xl font-semibold tracking-tight text-[#34443a] dark:text-[#d0dacb]">{value}</b></div>)}</div>
-    {loading ? <LoadingState /> : <Panel title="Request activity" subtitle="Supply requests and their latest status">
-      {!requests.length ? <EmptyState title="No supply requests">{isSupplier ? "Submit a request when your products need replenishing." : "Supplier requests will appear here."}</EmptyState> : <div className="overflow-x-auto"><table className="w-full border-collapse text-left">
+    {loading ? <LoadingState /> : <Panel title="Request activity" subtitle={`Showing ${requests.length} of ${pagination.total} supply requests`} action={<select className="h-9 rounded-md border border-[#dfe1d6] bg-[#fffefa] px-3 text-xs text-[#344132] outline-none dark:border-[#465143] dark:bg-[#202820] dark:text-[#e0e7dc]" aria-label="Filter supply requests by status" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}><option value="all">All statuses</option><option value="Pending">Pending</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option></select>}>
+      {!requests.length ? <EmptyState title={pagination.total ? "No requests on this page" : "No supply requests"}>{pagination.total ? "Choose another page." : isSupplier ? "Submit a request when your products need replenishing." : "Supplier requests will appear here."}</EmptyState> : <>
+        <div className="overflow-x-auto"><table className="w-full border-collapse text-left">
         <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261] dark:bg-[#252e26] dark:text-[#aab8a4]"><tr>{["Product", "Supplier", "Warehouse", "Quantity", "Submitted", "Status", ...(!isSupplier ? ["Action"] : [])].map((item) => <th className="whitespace-nowrap border-b border-[#e1e2d7] px-4 py-3 font-bold dark:border-[#394339]" key={item}>{item}</th>)}</tr></thead>
         <tbody>{requests.map((request) => <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0] dark:border-[#303a30] dark:text-[#aab8a4] dark:hover:bg-[#222a22]" key={request._id}>
           <td className="px-4 py-3"><strong className="font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{request.product?.name || "Product"}</strong><small className="mt-1 block font-mono text-[10px] text-[#929b90] dark:text-[#899789]">{request.product?.sku || ""}</small></td>
@@ -75,7 +89,7 @@ export default function Supply({ token, user }) {
           <td className="px-4 py-3"><StatusBadge>{request.status}</StatusBadge></td>
           {!isSupplier && <td className="px-4 py-3">{request.status === "Pending" ? <div className="flex items-center gap-3"><button className="text-[10px] font-bold text-[#4b6337] hover:underline" onClick={() => updateStatus(request, "Approved")}>Approve</button><button className="text-[10px] font-bold text-[#b96050] hover:underline" onClick={() => updateStatus(request, "Rejected")}>Reject</button></div> : "—"}</td>}
         </tr>)}</tbody>
-      </table></div>}
+      </table></div><Pagination page={currentPage} pageSize={PAGE_SIZE} total={pagination.total} onChange={setPage} /></>}
     </Panel>}
     {dialog && <Modal title="New supply request" onClose={() => setDialog(false)}>
       {error && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-3 py-2.5 text-xs text-[#9d5144] dark:border-[#67473e] dark:bg-[#382a27] dark:text-[#e3a79a]">{error}</div>}

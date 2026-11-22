@@ -22,7 +22,7 @@ export default function AuthScreen({ onAuthenticated, theme, onToggleTheme }) {
           ? { email: form.email, password: form.password }
           : { name: form.name, email: form.email, password: form.password, role: form.role },
       });
-      onAuthenticated({ token: result.token, user: result.user });
+      onAuthenticated({ user: result.user });
     } catch (err) {
       setError(err.message);
       await showError(err.message);
@@ -60,7 +60,6 @@ export default function AuthScreen({ onAuthenticated, theme, onToggleTheme }) {
             <Field label="Full name" autoComplete="name" value={form.name} onChange={update("name")} required />
             <SelectField label="Your role" value={form.role} onChange={update("role")} options={[
               { value: "salesRepresentative", label: "Sales representative" },
-              { value: "warehouseManager", label: "Warehouse manager" },
               { value: "supplier", label: "Supplier" },
             ]} />
           </>}
