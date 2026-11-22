@@ -12,6 +12,7 @@ const config = {
   users: { title: "Team", eyebrow: "PEOPLE & ACCESS", description: "Manage workspace accounts and their roles.", endpoint: "/users", createRoles: ["admin"] },
 };
 
+const emptyList = [];
 const roles = [
   { value: "admin", label: "Administrator" },
   { value: "warehouseManager", label: "Warehouse manager" },
@@ -26,12 +27,22 @@ export default function Catalog({ type, token, user }) {
   const [imageError, setImageError] = useState("");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({});
+  const [editingId, setEditingId] = useState("");
   const [search, setSearch] = useState("");
   const load = useCallback(async () => {
     const result = await apiRequest(definition.endpoint, { token });
+    if (type === "warehouses") {
+      const users = user.role === "admin" ? (await apiRequest("/users", { token })).users || [] : [];
+      return {
+        records: result.warehouses || [],
+        managers: users.filter((item) => item.role === "warehouseManager"),
+      };
+    }
     return result[type] || [];
-  }, [definition.endpoint, token, type]);
-  const { data = [], loading, error, reload } = useLoad(load);
+  }, [definition.endpoint, token, type, user.role]);
+  const { data: loadedData, loading, error, reload } = useLoad(load);
+  const data = Array.isArray(loadedData) ? loadedData : loadedData?.records || emptyList;
+  const managers = Array.isArray(loadedData) ? emptyList : loadedData?.managers || emptyList;
   const canCreate = definition.createRoles.includes(user.role);
   const filteredData = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -48,8 +59,19 @@ export default function Catalog({ type, token, user }) {
   const change = (key) => (event) => setForm((value) => ({ ...value, [key]: event.target.value }));
   const previewUrl = useMemo(() => form.imageFile ? URL.createObjectURL(form.imageFile) : "", [form.imageFile]);
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
-  const openNew = () => { setForm({}); setFormError(""); setImageError(""); setDialog(true); };
-  const closeDialog = () => { setDialog(false); setForm({}); setImageError(""); };
+  const openNew = () => { setForm({}); setEditingId(""); setFormError(""); setImageError(""); setDialog(true); };
+  const editWarehouse = (warehouse) => {
+    setForm({
+      name: warehouse.name,
+      location: warehouse.location,
+      capacity: warehouse.capacity,
+      manager: warehouse.manager?._id || "",
+    });
+    setEditingId(warehouse._id);
+    setFormError("");
+    setDialog(true);
+  };
+  const closeDialog = () => { setDialog(false); setForm({}); setEditingId(""); setImageError(""); };
 
   const submit = async (event) => {
     event.preventDefault();
@@ -66,12 +88,16 @@ export default function Catalog({ type, token, user }) {
         const { imageFile, ...fields } = form;
         body = { ...fields, price: Number(form.price), lowStockLimit: Number(form.lowStockLimit) };
         if (imageFile) Object.assign(body, await uploadProductImage(imageFile, token));
-      } else if (type === "warehouses") body = { ...form, capacity: Number(form.capacity) };
+      } else if (type === "warehouses") {
+        body = { ...form, capacity: Number(form.capacity) };
+        if (editingId) body.manager = form.manager || null;
+        else if (!body.manager) delete body.manager;
+      }
       else body = form;
-      await apiRequest(definition.endpoint, { token, method: "POST", body });
+      await apiRequest(editingId ? `${definition.endpoint}/${editingId}` : definition.endpoint, { token, method: editingId ? "PUT" : "POST", body });
       closeDialog();
       await reload();
-      await showSuccess(`${definition.title.slice(0, -1)} added`);
+      await showSuccess(editingId ? `${definition.title.slice(0, -1)} updated` : `${definition.title.slice(0, -1)} added`);
     } catch (err) {
       setFormError(err.message);
       await showError(err.message);
@@ -120,7 +146,7 @@ export default function Catalog({ type, token, user }) {
           </tr>)}</tbody>
         </> : type === "warehouses" ? <>
           <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261] dark:bg-[#252e26] dark:text-[#aab8a4]"><tr>{["Warehouse", "Location", "Manager", "Capacity", ...(user.role === "admin" ? [""] : [])].map((item, index) => <th className="whitespace-nowrap border-b border-[#e1e2d7] px-4 py-3 font-bold dark:border-[#394339]" key={`${item}-${index}`}>{item}</th>)}</tr></thead>
-          <tbody>{filteredData.map((item) => <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0] dark:border-[#303a30] dark:text-[#aab8a4] dark:hover:bg-[#222a22]" key={item._id}><td className="px-4 py-3"><div className="flex min-w-40 items-center gap-3"><span className="grid size-9 place-items-center rounded-md bg-[#edf1e9] text-sm text-[#557357] dark:bg-[#2b352b] dark:text-[#c4dd9d]">▤</span><strong className="font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{item.name}</strong></div></td><td className="px-4 py-3">{item.location}</td><td className="px-4 py-3">{item.manager?.name || "Unassigned"}</td><td className="px-4 py-3">{Number(item.capacity).toLocaleString()} units</td>{user.role === "admin" && <td className="px-4 py-3"><button className="text-[10px] font-bold text-[#b96050] hover:underline" onClick={() => remove(item)}>Delete</button></td>}</tr>)}</tbody>
+          <tbody>{filteredData.map((item) => <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0] dark:border-[#303a30] dark:text-[#aab8a4] dark:hover:bg-[#222a22]" key={item._id}><td className="px-4 py-3"><div className="flex min-w-40 items-center gap-3"><span className="grid size-9 place-items-center rounded-md bg-[#edf1e9] text-sm text-[#557357] dark:bg-[#2b352b] dark:text-[#c4dd9d]">▤</span><strong className="font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{item.name}</strong></div></td><td className="px-4 py-3">{item.location}</td><td className="px-4 py-3">{item.manager?.name || "Unassigned"}</td><td className="px-4 py-3">{Number(item.capacity).toLocaleString()} units</td>{user.role === "admin" && <td className="px-4 py-3"><div className="flex items-center gap-3"><button className="text-[10px] font-bold text-[#4b6337] hover:underline dark:text-[#c4dd9d]" onClick={() => editWarehouse(item)}>Edit</button><button className="text-[10px] font-bold text-[#b96050] hover:underline" onClick={() => remove(item)}>Delete</button></div></td>}</tr>)}</tbody>
         </> : <>
           <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261] dark:bg-[#252e26] dark:text-[#aab8a4]"><tr>{["Member", "Email", "Role", "Warehouses", "Joined", ""].map((item, index) => <th className="whitespace-nowrap border-b border-[#e1e2d7] px-4 py-3 font-bold dark:border-[#394339]" key={`${item}-${index}`}>{item}</th>)}</tr></thead>
           <tbody>{filteredData.map((item) => {
@@ -130,7 +156,7 @@ export default function Catalog({ type, token, user }) {
         </>}
       </table></div>}
     </Panel>}
-    {dialog && <Modal title={type === "products" ? "Add a product" : type === "warehouses" ? "Add a warehouse" : "Add a team member"} onClose={closeDialog}>
+    {dialog && <Modal title={type === "products" ? "Add a product" : type === "warehouses" ? `${editingId ? "Edit" : "Add"} a warehouse` : "Add a team member"} onClose={closeDialog}>
       {formError && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-3 py-2.5 text-xs text-[#9d5144] dark:border-[#67473e] dark:bg-[#382a27] dark:text-[#e3a79a]">{formError}</div>}
       <form className="grid gap-4" onSubmit={submit}>
         {type === "products" ? <>
@@ -142,6 +168,8 @@ export default function Catalog({ type, token, user }) {
           {previewUrl && <div className="flex items-center gap-3 rounded-md border border-[#e3e3d9] bg-[#faf9f3] p-2 dark:border-[#3c473b] dark:bg-[#202820]"><img className="size-11 rounded object-cover" src={previewUrl} alt="Product preview" /><span className="min-w-0 flex-1 truncate text-xs text-[#707d71] dark:text-[#aab8a4]">{form.imageFile.name}</span><button type="button" className="text-[10px] font-bold text-[#b96050]" onClick={() => setForm((value) => ({ ...value, imageFile: null }))}>Remove</button></div>}
         </> : type === "warehouses" ? <>
           <Field label="Warehouse name" value={form.name || ""} onChange={change("name")} required /><Field label="Location" value={form.location || ""} onChange={change("location")} required /><Field label="Capacity (units)" type="number" min="0" value={form.capacity || ""} onChange={change("capacity")} required />
+          <SelectField label="Warehouse manager (optional)" value={form.manager || ""} onChange={change("manager")} options={managers.map((manager) => ({ value: manager._id, label: `${manager.name} · ${manager.email}` }))} />
+          <p className="-mt-2 text-[10px] text-[#858e82] dark:text-[#9ba998]">{managers.length ? "Choose a manager, or leave this warehouse unassigned." : "No warehouse manager accounts are available. Add one under Team, or leave this warehouse unassigned."}</p>
         </> : <>
           <Field label="Full name" value={form.name || ""} onChange={change("name")} required /><Field label="Email address" type="email" value={form.email || ""} onChange={change("email")} required /><Field label="Temporary password" type="password" minLength="8" value={form.password || ""} onChange={change("password")} required /><SelectField label="Role" value={form.role || ""} onChange={change("role")} options={roles} required />
         </>}

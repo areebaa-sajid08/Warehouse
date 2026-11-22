@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import User from "../models/users.model.js";
@@ -152,6 +153,9 @@ router.delete("/products/:id", authorize("admin"), async (req, res) => {
 
 router.post("/warehouses", authorize("admin"), async (req, res) => {
   try {
+    if (req.body.manager && (!mongoose.isValidObjectId(req.body.manager) || !await User.exists({ _id: req.body.manager, role: "warehouseManager" }))) {
+      return res.status(400).json({ message: "Select a valid warehouse manager" });
+    }
     const warehouse = await Warehouse.create(req.body);
     if (warehouse.manager) await User.findByIdAndUpdate(warehouse.manager, { $addToSet: { assignedWarehouses: warehouse._id } });
     await publishActivityNotification({ actorId: req.user.id, title: "Warehouse added", message: `${warehouse.name} was added.`, category: "warehouse" });
@@ -167,8 +171,21 @@ router.get("/warehouses", async (req, res) => {
   res.json({ warehouses: await Warehouse.find(filter).populate("manager", "name email") });
 });
 router.put("/warehouses/:id", authorize("admin"), async (req, res) => {
-  const warehouse = await Warehouse.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-  if (!warehouse) return res.status(404).json({ message: "Warehouse not found" });
+  const updates = { ...req.body };
+  if (updates.manager !== undefined) {
+    if (updates.manager && (!mongoose.isValidObjectId(updates.manager) || !await User.exists({ _id: updates.manager, role: "warehouseManager" }))) {
+      return res.status(400).json({ message: "Select a valid warehouse manager" });
+    }
+    if (!updates.manager) updates.manager = null;
+  }
+  const existingWarehouse = await Warehouse.findById(req.params.id);
+  if (!existingWarehouse) return res.status(404).json({ message: "Warehouse not found" });
+  const previousManagerId = existingWarehouse.manager?.toString();
+  const warehouse = await Warehouse.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
+  if (updates.manager !== undefined && previousManagerId !== warehouse.manager?.toString()) {
+    if (previousManagerId) await User.findByIdAndUpdate(previousManagerId, { $pull: { assignedWarehouses: warehouse._id } });
+    if (warehouse.manager) await User.findByIdAndUpdate(warehouse.manager, { $addToSet: { assignedWarehouses: warehouse._id } });
+  }
   await publishActivityNotification({ actorId: req.user.id, title: "Warehouse updated", message: `${warehouse.name} was updated.`, category: "warehouse" });
   res.json({ warehouse });
 });
