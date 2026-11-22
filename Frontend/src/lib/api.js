@@ -1,4 +1,4 @@
-export const API_URL = (import.meta.env.VITE_API_URL || "https://warehouse-eta-gules.vercel.app").replace(/\/+$/, "");
+export const API_URL = (import.meta.env.VITE_API_URL || "https://warehouse-fa3j.vercel.app").replace(/\/+$/, "");
 
 export async function apiRequest(path, { token, method = "GET", body, headers = {} } = {}) {
   let response;

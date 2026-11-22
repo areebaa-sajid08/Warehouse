@@ -16,7 +16,7 @@ npm run dev
 
 The API runs at `http://localhost:3000`.
 
-For the Vite frontend, copy `Frontend/.env.example` to `Frontend/.env` and set `VITE_API_URL` to the backend deployment URL. The backend CORS configuration allows `https://warehouse-d6el.vercel.app`; if you change the frontend domain, update `FRONTEND_URL` in the backend deployment environment. In Vercel, configure `MONGODB_URI` and `JWT_SECRET` as project environment variables, and ensure MongoDB Atlas network access permits connections from the deployed backend.
+For the Vite frontend, set `VITE_API_URL` to `https://warehouse-fa3j.vercel.app` (or your backend deployment URL). The backend CORS configuration allows `https://warehouse-ni6r.vercel.app` and the previous frontend domain; if the frontend domain changes, update `FRONTEND_URL` in the backend deployment environment. In Vercel, configure `MONGODB_URI` and `JWT_SECRET` as project environment variables, and ensure MongoDB Atlas network access permits connections from the deployed backend.
 
 ## First admin account
 

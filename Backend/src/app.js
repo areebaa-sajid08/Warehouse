@@ -9,7 +9,7 @@ const app = express();
 app.use(cors({
   origin: (origin, cb) => {
     const localOrigin = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin || "");
-    const allowedOrigins = [process.env.FRONTEND_URL, "https://warehouse-d6el.vercel.app"];
+    const allowedOrigins = [process.env.FRONTEND_URL, "https://warehouse-d6el.vercel.app", "https://warehouse-ni6r.vercel.app"];
     const configuredOrigin = allowedOrigins.includes(origin);
     cb(null, !origin || localOrigin || configuredOrigin);
   },

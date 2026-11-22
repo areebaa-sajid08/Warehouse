@@ -19,6 +19,7 @@ export default function NotificationCenter({ token }) {
   const [open, setOpen] = useState(false);
   const knownIds = useRef(new Set());
   const firstLoad = useRef(true);
+  const containerRef = useRef(null);
 
   const refresh = useCallback(async () => {
     const result = await apiRequest("/notifications", { token });
@@ -54,6 +55,22 @@ export default function NotificationCenter({ token }) {
     };
   }, [refresh]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutsideClick = (event) => {
+      if (!containerRef.current?.contains(event.target)) setOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
   const markAllRead = async () => {
     try {
       await apiRequest("/notifications/read", { token, method: "PATCH" });
@@ -65,7 +82,7 @@ export default function NotificationCenter({ token }) {
     }
   };
 
-  return <div className="relative">
+  return <div className="relative" ref={containerRef}>
     <button className="relative grid size-9 place-items-center rounded-md border border-[#dfe1d6] bg-[#fffefa] text-base text-[#475542] hover:bg-[#f1f2eb] dark:border-[#414b3f] dark:bg-[#202820] dark:text-[#d4decf] dark:hover:bg-[#2c362c]" type="button" aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
       <span aria-hidden="true">♧</span>
       {unreadCount > 0 && <span className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-[#b75b48] px-1 text-[9px] font-bold leading-none text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>}
@@ -73,7 +90,7 @@ export default function NotificationCenter({ token }) {
     {open && <section className="absolute right-0 top-11 z-40 w-[min(90vw,24rem)] overflow-hidden rounded-xl border border-[#dedfd4] bg-[#fbfaf5] shadow-xl dark:border-[#414b3f] dark:bg-[#1d251e]" aria-label="Notifications">
       <header className="flex items-center justify-between gap-3 border-b border-[#e9e9e0] px-4 py-3 dark:border-[#394339]">
         <div><h2 className="text-sm font-semibold text-[#303e30] dark:text-[#e3e9de]">Notifications</h2><p className="mt-0.5 text-[10px] text-[#858e82] dark:text-[#a0ad9d]">{unreadCount ? `${unreadCount} unread` : "You're all caught up"}</p></div>
-        <div className="flex items-center gap-2"><button className="text-[10px] font-semibold text-[#4b6337] hover:underline dark:text-[#c4dd9d]" type="button" onClick={() => refresh().catch((refreshError) => setError(refreshError.message))}>Refresh</button>{unreadCount > 0 && <button className="text-[10px] font-semibold text-[#4b6337] hover:underline dark:text-[#c4dd9d]" type="button" onClick={markAllRead}>Mark all read</button>}</div>
+        <div className="flex items-center gap-2"><button className="text-[10px] font-semibold text-[#4b6337] hover:underline dark:text-[#c4dd9d]" type="button" onClick={() => refresh().catch((refreshError) => setError(refreshError.message))}>Refresh</button>{unreadCount > 0 && <button className="text-[10px] font-semibold text-[#4b6337] hover:underline dark:text-[#c4dd9d]" type="button" onClick={markAllRead}>Mark all read</button>}<button className="grid size-6 place-items-center rounded text-lg leading-none text-[#78866a] hover:bg-[#eff0e9] dark:text-[#aab8a4] dark:hover:bg-[#303830]" type="button" onClick={() => setOpen(false)} aria-label="Close notifications">×</button></div>
       </header>
       {error && <p className="border-b border-[#eed2c9] bg-[#f8ebe6] px-4 py-2 text-[10px] text-[#9d5144] dark:border-[#67473e] dark:bg-[#382a27] dark:text-[#e3a79a]" role="alert">{error}</p>}
       <div className="max-h-[min(65vh,28rem)] overflow-y-auto">
