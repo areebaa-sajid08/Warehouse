@@ -120,12 +120,12 @@ export default function App() {
           <span className="grid gap-0.5"><strong className="text-base font-bold">Wareflow</strong><small className="text-[8px] font-semibold tracking-[.16em] text-[#a7b09d]">INVENTORY PLATFORM</small></span>
         </button>
         <div className="mb-3 hidden px-3 text-[9px] font-bold tracking-[.18em] text-[#849080] md:block">YOUR WORKSPACE</div>
-        <nav className="flex min-w-0 gap-1 overflow-x-auto pb-1 md:flex-1 md:flex-col md:gap-0 md:overflow-visible" aria-label="Main navigation">
+        <nav className="flex w-full min-w-0 flex-wrap gap-1 pb-1 md:flex-1 md:flex-col md:flex-nowrap md:gap-0" aria-label="Main navigation">
           {["Workspace", "Operations", "Manage"].map((section) => {
             const links = items.filter((item) => item.section === section);
-            return links.length ? <div className="md:mb-6" key={section}>
+            return links.length ? <div className="w-full min-w-0 md:mb-6" key={section}>
               <span className="mb-2 hidden px-3 text-[10px] font-semibold text-[#91a294] md:block">{section}</span>
-              <div className="flex gap-1 md:flex-col">{links.map((item) => <button key={item.id} className={`flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs font-medium transition hover:bg-white/10 md:w-full md:gap-3 ${active.id === item.id ? "bg-[#c9ef6b]/10 text-[#d7f78b] md:shadow-[inset_2px_0_#c9ef6b]" : "text-[#b8c0b1]"}`} onClick={() => navigateToPage(item.id)}>
+              <div className="flex flex-wrap gap-1 md:flex-nowrap md:flex-col">{links.map((item) => <button key={item.id} className={`flex min-h-10 items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs font-medium transition hover:bg-white/10 md:w-full md:gap-3 ${active.id === item.id ? "bg-[#c9ef6b]/10 text-[#d7f78b] md:shadow-[inset_2px_0_#c9ef6b]" : "text-[#b8c0b1]"}`} onClick={() => navigateToPage(item.id)}>
                 <span className="grid w-4 place-items-center text-sm">{icons[item.id]}</span><span>{item.label}</span>
               </button>)}</div>
             </div> : null;

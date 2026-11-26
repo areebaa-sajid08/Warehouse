@@ -69,7 +69,7 @@ export default function Inventory({ token, onNavigate }) {
         </select>
         <input className="h-9 w-full rounded-md border border-[#dfe1d6] bg-[#fffefa] px-3 text-xs text-[#344132] outline-none placeholder:text-[#939b8e] dark:border-[#465143] dark:bg-[#202820] dark:text-[#e0e7dc] dark:placeholder:text-[#788677] sm:w-56" type="search" aria-label="Search stock" placeholder="Search product or warehouse" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
       </div>}>
-        {pageStocks.length ? <><div className="max-w-full overflow-x-auto overscroll-x-contain"><table className="w-full min-w-max border-collapse text-left">
+        {pageStocks.length ? <><div className="hidden max-w-full overflow-x-auto overscroll-x-contain lg:block"><table className="w-full min-w-max border-collapse text-left">
           <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261] dark:bg-[#252e26] dark:text-[#aab8a4]"><tr>{["Product", "SKU", "Warehouse", "On hand", "Reorder point", "Status"].map((item) => <th className="border-b border-[#e1e2d7] px-4 py-3 font-bold dark:border-[#394339]" key={item}>{item}</th>)}</tr></thead>
           <tbody>{pageStocks.map((item) => {
             const low = item.product && item.quantity <= item.product.lowStockLimit;
@@ -80,7 +80,19 @@ export default function Inventory({ token, onNavigate }) {
               <td className="px-4 py-3"><span className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[10px] font-semibold ${low ? "text-[#b4743b]" : "text-[#4b7957]"}`}><i className={`size-1.5 rounded-full ${low ? "bg-[#d69a58]" : "bg-[#6a996d]"}`} />{low ? "Reorder" : "In stock"}</span></td>
             </tr>;
           })}</tbody>
-        </table></div><Pagination page={currentPage} pageSize={PAGE_SIZE} total={pagination.total} onChange={setPage} /></> : <EmptyState title={pagination.total ? "No stock on this page" : "No stock recorded"}>{pagination.total ? "Choose another page." : "Record a stock-in transaction to start tracking inventory."}</EmptyState>}
+        </table></div>
+        <div className="grid gap-3 p-3 lg:hidden">{pageStocks.map((item) => {
+          const low = item.product && item.quantity <= item.product.lowStockLimit;
+          return <article className="min-w-0 rounded-lg border border-[#e3e3d9] bg-[#fffefa] p-3 dark:border-[#3c473b] dark:bg-[#202820]" key={item._id}>
+            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><strong className="block break-words text-sm font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{item.product?.name || "Deleted product"}</strong><small className="mt-1 block text-xs text-[#929b90] dark:text-[#899789]">{item.warehouse?.name || "Deleted warehouse"}</small></div><span className={`shrink-0 rounded px-2 py-1 text-[10px] font-semibold ${low ? "bg-[#f3eddd] text-[#85602e]" : "bg-[#eaf1e9] text-[#496544] dark:bg-[#26372a] dark:text-[#b2d8af]"}`}>{low ? "Reorder" : "In stock"}</span></div>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <CardDetail label="SKU">{item.product?.sku || "—"}</CardDetail>
+              <CardDetail label="On hand">{item.quantity}</CardDetail>
+              <CardDetail label="Reorder point">{item.product?.lowStockLimit ?? "—"}</CardDetail>
+            </div>
+          </article>;
+        })}</div>
+        <Pagination page={currentPage} pageSize={PAGE_SIZE} total={pagination.total} onChange={setPage} /></> : <EmptyState title={pagination.total ? "No stock on this page" : "No stock recorded"}>{pagination.total ? "Choose another page." : "Record a stock-in transaction to start tracking inventory."}</EmptyState>}
       </Panel>
     </>}
     {dialog && <Modal title={dialog === "in" ? "Receive stock" : "Record stock out"} onClose={() => setDialog("")}>
@@ -99,4 +111,8 @@ export default function Inventory({ token, onNavigate }) {
 
 function SummaryCard({ label, value, caption }) {
   return <div className="grid gap-1 rounded-xl border border-[#dedfd4] bg-[#fbfaf5] p-4 shadow-sm dark:border-[#303a30] dark:bg-[#1a211b]"><span className="text-[10px] text-[#858e81] dark:text-[#9ba998]">{label}</span><b className="text-2xl font-semibold tracking-tight text-[#34443a] dark:text-[#d0dacb]">{value}</b><small className="text-[10px] text-[#92998e] dark:text-[#899789]">{caption}</small></div>;
+}
+
+function CardDetail({ label, children }) {
+  return <div className="min-w-0"><span className="block text-[10px] text-[#92998e] dark:text-[#899789]">{label}</span><strong className="mt-1 block break-words text-xs font-semibold text-[#475542] dark:text-[#c7d2c2]">{children}</strong></div>;
 }

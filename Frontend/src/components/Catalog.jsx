@@ -164,7 +164,8 @@ export default function Catalog({ type, token, user }) {
       {type === "products" && <select className="h-9 rounded-md border border-[#dfe1d6] bg-[#fffefa] px-3 text-xs text-[#344132] outline-none dark:border-[#465143] dark:bg-[#202820] dark:text-[#e0e7dc]" aria-label="Filter products by category" value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(1); }}><option value="">All categories</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select>}
       <label className="flex w-full items-center gap-2 rounded-md border border-[#dfe1d6] bg-[#fffefa] px-3 text-[#78866a] focus-within:ring-4 focus-within:ring-[#9ab75c]/15 dark:border-[#465143] dark:bg-[#202820] dark:text-[#a7b69a] sm:w-64"><span className="text-base">⌕</span><input className="h-9 w-full min-w-0 bg-transparent text-xs text-[#344132] outline-none placeholder:text-[#939b8e] dark:text-[#e0e7dc] dark:placeholder:text-[#788677]" type="search" placeholder={`Search ${definition.title.toLowerCase()}`} value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></label>
     </div>}>
-      {!data.length ? <EmptyState title={total ? "No records on this page" : `No ${definition.title.toLowerCase()} found`}>{total ? "Choose another page." : canCreate ? "Add your first record to get started." : "Records will appear here when available."}</EmptyState> : <div className="max-w-full overflow-x-auto overscroll-x-contain"><table className="w-full min-w-max border-collapse text-left">
+      {!data.length ? <EmptyState title={total ? "No records on this page" : `No ${definition.title.toLowerCase()} found`}>{total ? "Choose another page." : canCreate ? "Add your first record to get started." : "Records will appear here when available."}</EmptyState> : <>
+        <div className="hidden max-w-full overflow-x-auto overscroll-x-contain lg:block"><table className="w-full min-w-max border-collapse text-left">
         {type === "products" ? <>
           <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261] dark:bg-[#252e26] dark:text-[#aab8a4]"><tr>{["Product", "SKU", "Category", "Price", "Reorder point", "Supplier", "Status", ...(user.role === "admin" ? [""] : [])].map((item, index) => <th className="whitespace-nowrap border-b border-[#e1e2d7] px-4 py-3 font-bold dark:border-[#394339]" key={`${item}-${index}`}>{item}</th>)}</tr></thead>
           <tbody>{pageData.map((item) => <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0] dark:border-[#303a30] dark:text-[#aab8a4] dark:hover:bg-[#222a22]" key={item._id}>
@@ -185,7 +186,17 @@ export default function Catalog({ type, token, user }) {
             return <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0] dark:border-[#303a30] dark:text-[#aab8a4] dark:hover:bg-[#222a22]" key={item._id}><td className="px-4 py-3"><div className="flex min-w-36 items-center gap-3"><span className="grid size-8 shrink-0 place-items-center rounded-md bg-[#d9e3d6] text-xs font-bold text-[#203d32] dark:bg-[#2b352b] dark:text-[#c4dd9d]">{(item.name || item.email).slice(0, 1).toUpperCase()}</span><strong className="font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{item.name}{isCurrentUser && <span className="ml-2 rounded bg-[#edf2e3] px-1.5 py-1 text-[9px] font-semibold text-[#3e5736] dark:bg-[#35432f] dark:text-[#c4dd9d]">You</span>}</strong></div></td><td className="px-4 py-3">{item.email}</td><td className="px-4 py-3"><span className="rounded bg-[#edf2e3] px-2 py-1 text-[10px] text-[#3e5736] dark:bg-[#35432f] dark:text-[#c4dd9d]">{roleLabel(item.role)}</span></td><td className="px-4 py-3">{item.assignedWarehouses?.length || "—"}</td><td className="px-4 py-3">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "—"}</td><td className="px-4 py-3">{isCurrentUser ? <span className="text-[10px] text-[#929b90] dark:text-[#899789]" title="You cannot delete your own account">Current account</span> : <button className="text-[10px] font-bold text-[#b96050] hover:underline" onClick={() => remove(item)}>Delete</button>}</td></tr>;
           })}</tbody>
         </>}
-      </table></div>}
+        </table></div>
+        <MobileRecordCards
+          records={pageData}
+          type={type}
+          user={user}
+          onArchive={remove}
+          onRestore={restore}
+          onEditWarehouse={editWarehouse}
+          onDelete={remove}
+        />
+      </>}
       <Pagination page={currentPage} pageSize={PAGE_SIZE} total={total} onChange={setPage} />
     </Panel>}
     {dialog && <Modal title={type === "products" ? "Add a product" : type === "warehouses" ? `${editingId ? "Edit" : "Add"} a warehouse` : "Add a team member"} onClose={closeDialog}>
@@ -210,6 +221,75 @@ export default function Catalog({ type, token, user }) {
       </form>
     </Modal>}
   </>;
+}
+
+function MobileRecordCards({ records, type, user, onArchive, onRestore, onEditWarehouse, onDelete }) {
+  return <div className="grid gap-3 p-3 lg:hidden">
+    {records.map((item) => {
+      const currentUser = String(item._id) === String(user._id || user.id);
+      return <article className="min-w-0 rounded-lg border border-[#e3e3d9] bg-[#fffefa] p-3 dark:border-[#3c473b] dark:bg-[#202820]" key={item._id}>
+        {type === "products" ? <>
+          <div className="flex min-w-0 items-start gap-3">
+            {item.imageUrl
+              ? <img className="size-11 shrink-0 rounded-md bg-[#edf1e9] object-cover dark:bg-[#2b352b]" src={item.imageUrl} alt="" />
+              : <span className="grid size-11 shrink-0 place-items-center rounded-md bg-[#edf1e9] text-sm font-bold uppercase text-[#31432d] dark:bg-[#2b352b] dark:text-[#c4dd9d]">{item.name?.slice(0, 1)}</span>}
+            <div className="min-w-0 flex-1">
+              <strong className="block break-words text-sm font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{item.name}</strong>
+              <p className="mt-1 break-words text-xs text-[#929b90] dark:text-[#899789]">{item.description || "No description"}</p>
+            </div>
+            <span className={`shrink-0 rounded px-2 py-1 text-[10px] font-bold ${item.archivedAt ? "bg-[#f5e8e3] text-[#9c4e3e]" : "bg-[#eaf1e9] text-[#496544] dark:bg-[#26372a] dark:text-[#b2d8af]"}`}>{item.archivedAt ? "Archived" : "Active"}</span>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3 text-xs sm:grid-cols-3">
+            <CardDetail label="SKU">{item.sku}</CardDetail>
+            <CardDetail label="Category">{item.category || "—"}</CardDetail>
+            <CardDetail label="Price">{formatCurrency(item.price)}</CardDetail>
+            <CardDetail label="Reorder point">{item.lowStockLimit}</CardDetail>
+            <CardDetail label="Supplier">{item.supplier?.name || "—"}</CardDetail>
+          </div>
+          {user.role === "admin" && <div className="mt-3 flex justify-end border-t border-[#e9e9e0] pt-2 dark:border-[#394339]">
+            {item.archivedAt
+              ? <button className="min-h-9 px-2 text-xs font-bold text-[#4b6337] hover:underline dark:text-[#c4dd9d]" onClick={() => onRestore(item)}>Restore product</button>
+              : <button className="min-h-9 px-2 text-xs font-bold text-[#b96050] hover:underline" onClick={() => onArchive(item)}>Archive product</button>}
+          </div>}
+        </> : type === "warehouses" ? <>
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-md bg-[#edf1e9] text-sm text-[#557357] dark:bg-[#2b352b] dark:text-[#c4dd9d]">▤</span>
+            <div className="min-w-0 flex-1"><strong className="block break-words text-sm font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{item.name}</strong><p className="mt-1 break-words text-xs text-[#929b90] dark:text-[#899789]">{item.location}</p></div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
+            <CardDetail label="Manager">{item.manager?.name || "Unassigned"}</CardDetail>
+            <CardDetail label="Capacity">{(item.usedCapacity || 0).toLocaleString()} / {Number(item.capacity).toLocaleString()} units</CardDetail>
+          </div>
+          {user.role === "admin" && <div className="mt-3 flex justify-end gap-3 border-t border-[#e9e9e0] pt-2 dark:border-[#394339]">
+            <button className="min-h-9 px-2 text-xs font-bold text-[#4b6337] hover:underline dark:text-[#c4dd9d]" onClick={() => onEditWarehouse(item)}>Edit</button>
+            <button className="min-h-9 px-2 text-xs font-bold text-[#b96050] hover:underline" onClick={() => onDelete(item)}>Delete</button>
+          </div>}
+        </> : <>
+          <div className="flex items-start gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-md bg-[#d9e3d6] text-xs font-bold text-[#203d32] dark:bg-[#2b352b] dark:text-[#c4dd9d]">{(item.name || item.email).slice(0, 1).toUpperCase()}</span>
+            <div className="min-w-0 flex-1"><strong className="block break-words text-sm font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{item.name}{currentUser && <span className="ml-2 rounded bg-[#edf2e3] px-1.5 py-1 text-[9px] font-semibold text-[#3e5736] dark:bg-[#35432f] dark:text-[#c4dd9d]">You</span>}</strong><p className="mt-1 break-all text-xs text-[#929b90] dark:text-[#899789]">{item.email}</p></div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
+            <CardDetail label="Role">{roleLabel(item.role)}</CardDetail>
+            <CardDetail label="Warehouses">{item.assignedWarehouses?.length || "—"}</CardDetail>
+            <CardDetail label="Joined">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "—"}</CardDetail>
+          </div>
+          <div className="mt-3 flex justify-end border-t border-[#e9e9e0] pt-2 dark:border-[#394339]">
+            {currentUser
+              ? <span className="py-2 text-[10px] text-[#929b90] dark:text-[#899789]" title="You cannot delete your own account">Current account</span>
+              : <button className="min-h-9 px-2 text-xs font-bold text-[#b96050] hover:underline" onClick={() => onDelete(item)}>Delete member</button>}
+          </div>
+        </>}
+      </article>;
+    })}
+  </div>;
+}
+
+function CardDetail({ label, children }) {
+  return <div className="min-w-0">
+    <span className="block text-[10px] font-medium text-[#92998e] dark:text-[#899789]">{label}</span>
+    <strong className="mt-1 block break-words text-xs font-semibold text-[#475542] dark:text-[#c7d2c2]">{children}</strong>
+  </div>;
 }
 
 function roleLabel(role) {

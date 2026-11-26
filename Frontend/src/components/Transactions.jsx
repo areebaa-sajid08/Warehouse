@@ -56,7 +56,7 @@ export default function Transactions({ token }) {
       <select className="h-9 rounded-md border border-[#dfe1d6] bg-[#fffefa] px-3 text-xs text-[#344132] outline-none dark:border-[#465143] dark:bg-[#202820] dark:text-[#e0e7dc]" aria-label="Sort transactions" value={sort} onChange={(event) => updateFilter(setSort)(event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select>
     </div>}>
       {!pageTransactions.length ? <EmptyState title={pagination.total ? "No transactions on this page" : "No stock movements"}>{pagination.total ? "Choose another page." : "Stock-in and stock-out activity will appear here."}</EmptyState> : <>
-        <div className="max-w-full overflow-x-auto overscroll-x-contain"><table className="w-full min-w-max border-collapse text-left">
+        <div className="hidden max-w-full overflow-x-auto overscroll-x-contain lg:block"><table className="w-full min-w-max border-collapse text-left">
           <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261] dark:bg-[#252e26] dark:text-[#aab8a4]"><tr>{["Date & time", "Movement", "Product", "Warehouse", "Quantity", "Performed by", "Note"].map((label) => <th className="whitespace-nowrap border-b border-[#e1e2d7] px-4 py-3 font-bold dark:border-[#394339]" key={label}>{label}</th>)}</tr></thead>
           <tbody>{pageTransactions.map((transaction) => {
             const isStockIn = transaction.transactionType === "stock-in";
@@ -71,8 +71,25 @@ export default function Transactions({ token }) {
             </tr>;
           })}</tbody>
         </table></div>
+        <div className="grid gap-3 p-3 lg:hidden">{pageTransactions.map((transaction) => {
+          const isStockIn = transaction.transactionType === "stock-in";
+          return <article className="min-w-0 rounded-lg border border-[#e3e3d9] bg-[#fffefa] p-3 dark:border-[#3c473b] dark:bg-[#202820]" key={transaction._id}>
+            <div className="flex items-start justify-between gap-3"><div className="min-w-0"><strong className="block break-words text-sm font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{transaction.product?.name || "Deleted product"}</strong><span className="mt-1 block text-[10px] text-[#929b90] dark:text-[#899789]">{new Date(transaction.date || transaction.createdAt).toLocaleString()}</span></div><span className={`shrink-0 rounded px-2 py-1 text-[10px] font-bold ${isStockIn ? "bg-[#eaf1e9] text-[#496544] dark:bg-[#26372a] dark:text-[#b2d8af]" : "bg-[#f5e8e3] text-[#9c4e3e] dark:bg-[#3a2a27] dark:text-[#e3a79a]"}`}>{isStockIn ? "Stock in" : "Stock out"}</span></div>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <CardDetail label="SKU">{transaction.product?.sku || "—"}</CardDetail>
+              <CardDetail label="Warehouse">{transaction.warehouse?.name || "Deleted warehouse"}</CardDetail>
+              <CardDetail label="Quantity"><span className={isStockIn ? "text-[#496544] dark:text-[#b2d8af]" : "text-[#9c4e3e] dark:text-[#e3a79a]"}>{isStockIn ? "+" : "−"}{transaction.quantity}</span></CardDetail>
+              <CardDetail label="Performed by">{transaction.performedBy?.name || "Unknown user"}</CardDetail>
+              <CardDetail label="Note">{transaction.note || "—"}</CardDetail>
+            </div>
+          </article>;
+        })}</div>
         <Pagination page={currentPage} pageSize={PAGE_SIZE} total={pagination.total} onChange={setPage} />
       </>}
     </Panel>}
   </>;
+}
+
+function CardDetail({ label, children }) {
+  return <div className="min-w-0"><span className="block text-[10px] text-[#92998e] dark:text-[#899789]">{label}</span><strong className="mt-1 block break-words text-xs font-semibold text-[#475542] dark:text-[#c7d2c2]">{children}</strong></div>;
 }
