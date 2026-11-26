@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react";
 
 export function PageHeader({ eyebrow, title, description, action }) {
-  return <div className="mb-7 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
-    <div>
+  return <div className="mb-6 flex min-w-0 flex-col items-start justify-between gap-4 sm:mb-7 sm:flex-row sm:items-end">
+    <div className="min-w-0">
       <div className="mb-2 text-[10px] font-bold tracking-[0.18em] text-[#78866a] dark:text-[#a7b69a]">{eyebrow}</div>
-      <h1 className="text-3xl font-semibold tracking-[-0.06em] text-[#202820] dark:text-[#e3e9de] sm:text-4xl">{title}</h1>
-      <p className="mt-2 text-sm text-[#737d70] dark:text-[#a0ad9d]">{description}</p>
+      <h1 className="break-words text-3xl font-semibold tracking-[-0.06em] text-[#202820] dark:text-[#e3e9de] sm:text-4xl">{title}</h1>
+      <p className="mt-2 max-w-2xl text-sm text-[#737d70] dark:text-[#a0ad9d]">{description}</p>
     </div>
-    {action && <div className="flex items-center">{action}</div>}
+    {action && <div className="flex w-full min-w-0 items-center sm:w-auto">{action}</div>}
   </div>;
 }
 
 export function Panel({ title, subtitle, action, children, className = "" }) {
   return <section className={`min-w-0 overflow-hidden rounded-xl border border-[#dedfd4] bg-[#fbfaf5] shadow-sm dark:border-[#303a30] dark:bg-[#1a211b] ${className}`}>
-    {(title || action) && <div className="flex flex-col justify-between gap-3 border-b border-[#e9e9e0] px-5 py-4 dark:border-[#303a30] sm:flex-row sm:items-center">
-      <div>{title && <h2 className="text-sm font-semibold text-[#303e30] dark:text-[#e0e7dc]">{title}</h2>}{subtitle && <p className="mt-1 text-xs text-[#858e82] dark:text-[#9ba998]">{subtitle}</p>}</div>
-      {action}
+    {(title || action) && <div className="flex min-w-0 flex-col justify-between gap-3 border-b border-[#e9e9e0] px-3 py-4 dark:border-[#303a30] sm:px-5 sm:flex-row sm:items-center">
+      <div className="min-w-0">{title && <h2 className="text-sm font-semibold text-[#303e30] dark:text-[#e0e7dc]">{title}</h2>}{subtitle && <p className="mt-1 text-xs text-[#858e82] dark:text-[#9ba998]">{subtitle}</p>}</div>
+      {action && <div className="w-full min-w-0 sm:w-auto">{action}</div>}
     </div>}
     {children}
   </section>;

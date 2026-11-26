@@ -56,7 +56,7 @@ export default function Transactions({ token }) {
       <select className="h-9 rounded-md border border-[#dfe1d6] bg-[#fffefa] px-3 text-xs text-[#344132] outline-none dark:border-[#465143] dark:bg-[#202820] dark:text-[#e0e7dc]" aria-label="Sort transactions" value={sort} onChange={(event) => updateFilter(setSort)(event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select>
     </div>}>
       {!pageTransactions.length ? <EmptyState title={pagination.total ? "No transactions on this page" : "No stock movements"}>{pagination.total ? "Choose another page." : "Stock-in and stock-out activity will appear here."}</EmptyState> : <>
-        <div className="overflow-x-auto"><table className="w-full border-collapse text-left">
+        <div className="max-w-full overflow-x-auto overscroll-x-contain"><table className="w-full min-w-max border-collapse text-left">
           <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261] dark:bg-[#252e26] dark:text-[#aab8a4]"><tr>{["Date & time", "Movement", "Product", "Warehouse", "Quantity", "Performed by", "Note"].map((label) => <th className="whitespace-nowrap border-b border-[#e1e2d7] px-4 py-3 font-bold dark:border-[#394339]" key={label}>{label}</th>)}</tr></thead>
           <tbody>{pageTransactions.map((transaction) => {
             const isStockIn = transaction.transactionType === "stock-in";

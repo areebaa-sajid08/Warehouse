@@ -79,7 +79,7 @@ export default function Dashboard({ user, token, onNavigate }) {
   return <>
     <PageHeader eyebrow="WAREHOUSE CONTROL ROOM" title={`Good ${getGreeting()}, ${user.name?.split(" ")[0] || "there"}.`} description="A live view of the records your team has put into the system." action={<span className="inline-flex items-center gap-2 rounded border border-[#dfe4d2] bg-[#f7f8ef] px-3 py-2 text-[9px] font-bold tracking-widest text-[#65764c] dark:border-[#45523c] dark:bg-[#252f23] dark:text-[#c4dd9d]"><i className="size-1.5 rounded-full bg-[#9abb56] ring-4 ring-[#dce8c7] dark:ring-[#3b4932]" />LIVE DATABASE</span>} />
     {loading ? <LoadingState label="Loading your workspace" /> : error ? <div className="rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-4 py-3 text-xs text-[#9d5144] dark:border-[#67473e] dark:bg-[#382a27] dark:text-[#e3a79a]">{error}</div> : <>
-      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="mb-5 grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 xl:grid-cols-4">
         {metrics.map(([label, value, caption, icon], index) => <article key={label} className="group relative min-h-32 overflow-hidden rounded-xl border border-[#dedfd4] bg-[#fbfaf5] p-4 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-lg dark:border-[#303a30] dark:bg-[#1a211b]">
           <div className={`absolute inset-x-0 top-0 h-1 ${index === 3 ? "bg-[#c9ef6b]" : index === 1 ? "bg-[#c5a26c]" : "bg-[#82945d]"}`} />
           <div className="flex items-center justify-between text-[11px] font-semibold text-[#737d70] dark:text-[#a0ad9d]"><span>{label}</span><span className="grid size-8 place-items-center rounded-md bg-[#e8efda] text-sm text-[#293627] dark:bg-[#35432f] dark:text-[#d0e6ae]">{icon}</span></div>
@@ -127,7 +127,7 @@ function WarehouseCapacity({ warehouses }) {
         <span className="grid size-9 shrink-0 place-items-center rounded-md border border-[#dce2cb] bg-[#edf2e2] text-sm text-[#455e35] dark:border-[#465143] dark:bg-[#303b2e] dark:text-[#c4dd9d]">▤</span>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2"><strong className="truncate text-[11px] text-[#303e30] dark:text-[#d6dfd1]">{warehouse.name}</strong><span className="truncate text-[9px] text-[#838b7d] dark:text-[#899789]">{warehouse.location}</span></div>
-          <div className="my-2 h-1 overflow-hidden rounded bg-[#e4e6d9] dark:bg-[#3b473b]"><span className="block h-full rounded bg-[#a4ca5d] transition-all" style={{ width: `${percentage ?? 0}%` }} /></div>
+          <progress className="my-2 block h-1 w-full overflow-hidden rounded accent-[#a4ca5d]" value={units} max={capacity || 1} aria-label={`${percentage}% of warehouse capacity used`} />
           <small className="text-[9px] text-[#828b7d] dark:text-[#899789]">{capacity ? `${percentage}% of ${capacity.toLocaleString()} unit capacity` : "No storage capacity available"}</small>
         </div>
         <div className="grid justify-items-end"><strong className="text-xs text-[#2e3c2e] dark:text-[#d6dfd1]">{units.toLocaleString()}</strong><small className="text-[9px] text-[#878f82] dark:text-[#899789]">units</small></div>

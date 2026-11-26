@@ -69,7 +69,7 @@ export default function Inventory({ token, onNavigate }) {
         </select>
         <input className="h-9 w-full rounded-md border border-[#dfe1d6] bg-[#fffefa] px-3 text-xs text-[#344132] outline-none placeholder:text-[#939b8e] dark:border-[#465143] dark:bg-[#202820] dark:text-[#e0e7dc] dark:placeholder:text-[#788677] sm:w-56" type="search" aria-label="Search stock" placeholder="Search product or warehouse" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
       </div>}>
-        {pageStocks.length ? <><div className="overflow-x-auto"><table className="w-full border-collapse text-left">
+        {pageStocks.length ? <><div className="max-w-full overflow-x-auto overscroll-x-contain"><table className="w-full min-w-max border-collapse text-left">
           <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261] dark:bg-[#252e26] dark:text-[#aab8a4]"><tr>{["Product", "SKU", "Warehouse", "On hand", "Reorder point", "Status"].map((item) => <th className="border-b border-[#e1e2d7] px-4 py-3 font-bold dark:border-[#394339]" key={item}>{item}</th>)}</tr></thead>
           <tbody>{pageStocks.map((item) => {
             const low = item.product && item.quantity <= item.product.lowStockLimit;

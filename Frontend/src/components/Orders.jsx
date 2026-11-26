@@ -113,7 +113,7 @@ export default function Orders({ token, user }) {
     <PageHeader eyebrow="ORDER MANAGEMENT" title="Orders" description="Follow each order from request to fulfillment." action={canCreate && <Button onClick={() => { setError(""); setForm(newOrderForm()); setDialog(true); }}>＋ Create order</Button>} />
     {loadError && <div className="mb-4 rounded-md border border-[#eed2c9] bg-[#f8ebe6] px-4 py-3 text-xs text-[#9d5144] dark:border-[#67473e] dark:bg-[#382a27] dark:text-[#e3a79a]">{loadError}</div>}
     {loading ? <LoadingState /> : <>
-      <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="mb-4 grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label="All orders" value={Object.values(data?.statusSummary || {}).reduce((sum, item) => sum + item.count, 0)} />
         <SummaryCard label="Pending" value={data?.statusSummary?.Pending?.count || 0} />
         <SummaryCard label="Processing" value={data?.statusSummary?.Processing?.count || 0} />
@@ -126,7 +126,7 @@ export default function Orders({ token, user }) {
         <input className="h-9 w-full rounded-md border border-[#dfe1d6] bg-[#fffefa] px-3 text-xs text-[#344132] outline-none placeholder:text-[#939b8e] dark:border-[#465143] dark:bg-[#202820] dark:text-[#e0e7dc] dark:placeholder:text-[#788677] sm:w-56" type="search" aria-label="Search orders" placeholder="Search order or customer" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
       </div>}>
         {!orders.length ? <EmptyState title={pagination.total ? "No orders on this page" : "No orders found"}>{pagination.total ? "Choose another page." : canCreate ? "Create your first order to get started." : "Orders will appear here once they are placed."}</EmptyState> : <>
-          <div className="overflow-x-auto"><table className="w-full border-collapse text-left">
+          <div className="max-w-full overflow-x-auto overscroll-x-contain"><table className="w-full min-w-max border-collapse text-left">
             <thead className="bg-[#f0f0e8] text-[10px] uppercase tracking-wider text-[#667261] dark:bg-[#252e26] dark:text-[#aab8a4]"><tr>{["Order", "Customer", "Items", "Warehouse", "Total", "Status", ...(canProcess || canCancel ? ["Actions"] : [])].map((item) => <th className="whitespace-nowrap border-b border-[#e1e2d7] px-4 py-3 font-bold dark:border-[#394339]" key={item}>{item}</th>)}</tr></thead>
             <tbody>{pageOrders.map((order) => <tr className="border-b border-[#e9e9e0] text-xs text-[#68756a] last:border-0 hover:bg-[#f7f7f0] dark:border-[#303a30] dark:text-[#aab8a4] dark:hover:bg-[#222a22]" key={order._id}>
               <td className="px-4 py-3"><strong className="font-mono font-semibold text-[#3d4c41] dark:text-[#d6dfd1]">{order.orderNumber}</strong><small className="mt-1 block text-[10px] text-[#929b90] dark:text-[#899789]">{new Date(order.createdAt).toLocaleDateString()}</small></td>
