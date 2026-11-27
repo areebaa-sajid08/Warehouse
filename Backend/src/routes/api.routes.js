@@ -173,7 +173,12 @@ router.get("/suppliers", authorize("admin", "warehouseManager"), async (req, res
   res.json({ suppliers: result.data, pagination: result.pagination });
 });
 router.get("/notifications", async (req, res) => {
-  const visibility = { $or: [{ visibleToRoles: req.user.role }, { recipientIds: req.user.id }] };
+  const visibility = {
+    $and: [
+      { $or: [{ visibleToRoles: req.user.role }, { recipientIds: req.user.id }] },
+      { dismissedBy: { $ne: req.user.id } },
+    ],
+  };
   const [result, unreadCount] = await Promise.all([
     findPage(ActivityNotification, visibility, req.query, {
       sort: { createdAt: -1 },
@@ -194,9 +199,30 @@ router.get("/notifications", async (req, res) => {
   res.json({ notifications: items, pagination: result.pagination, unreadCount });
 });
 router.patch("/notifications/read", async (req, res) => {
-  const visibility = { $or: [{ visibleToRoles: req.user.role }, { recipientIds: req.user.id }] };
+  const visibility = {
+    $and: [
+      { $or: [{ visibleToRoles: req.user.role }, { recipientIds: req.user.id }] },
+      { dismissedBy: { $ne: req.user.id } },
+    ],
+  };
   await ActivityNotification.updateMany(visibility, { $addToSet: { readBy: req.user.id } });
   res.json({ message: "Notifications marked as read" });
+});
+router.delete("/notifications/:id", async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid notification ID" });
+  const notification = await ActivityNotification.findOneAndUpdate(
+    {
+      _id: req.params.id,
+      $and: [
+        { $or: [{ visibleToRoles: req.user.role }, { recipientIds: req.user.id }] },
+        { dismissedBy: { $ne: req.user.id } },
+      ],
+    },
+    { $addToSet: { dismissedBy: req.user.id } },
+    { new: true },
+  );
+  if (!notification) return res.status(404).json({ message: "Notification not found" });
+  res.json({ message: "Notification deleted" });
 });
 router.put("/users/:id", authorize("admin"), async (req, res) => {
   const imageError = validateUserImage(req.body);

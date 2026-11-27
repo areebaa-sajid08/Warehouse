@@ -8,6 +8,7 @@ const activityNotificationSchema = new mongoose.Schema({
   visibleToRoles: [{ type: String, enum: ["admin", "warehouseManager", "supplier", "salesRepresentative"] }],
   recipientIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  dismissedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   dedupeKey: { type: String, unique: true, sparse: true },
 }, { timestamps: true });
 

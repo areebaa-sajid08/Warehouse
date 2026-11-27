@@ -19,6 +19,7 @@ export default function NotificationCenter({ token }) {
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, pages: 1 });
+  const [deletingIds, setDeletingIds] = useState(() => new Set());
   const knownIds = useRef(new Set());
   const firstLoad = useRef(true);
   const containerRef = useRef(null);
@@ -86,6 +87,22 @@ export default function NotificationCenter({ token }) {
     }
   };
 
+  const deleteNotification = async (notificationId) => {
+    setDeletingIds((ids) => new Set(ids).add(notificationId));
+    try {
+      await apiRequest(`/notifications/${notificationId}`, { token, method: "DELETE" });
+      await refresh();
+    } catch (deleteError) {
+      setError(deleteError.message);
+    } finally {
+      setDeletingIds((ids) => {
+        const nextIds = new Set(ids);
+        nextIds.delete(notificationId);
+        return nextIds;
+      });
+    }
+  };
+
   const navigatePage = (nextPage) => {
     firstLoad.current = true;
     setPage(nextPage);
@@ -104,7 +121,7 @@ export default function NotificationCenter({ token }) {
       {error && <p className="border-b border-[#eed2c9] bg-[#f8ebe6] px-4 py-2 text-[10px] text-[#9d5144] dark:border-[#67473e] dark:bg-[#382a27] dark:text-[#e3a79a]" role="alert">{error}</p>}
       <div className="max-h-[min(65vh,28rem)] overflow-y-auto">
         {notifications.length ? notifications.map((notification) => <article className={`border-b border-[#e9e9e0] px-4 py-3 last:border-0 dark:border-[#394339] ${notification.read ? "" : "bg-[#f3f5eb] dark:bg-[#252f25]"}`} key={notification._id}>
-          <div className="flex items-start gap-2"><span className="mt-0.5 size-2 shrink-0 rounded-full bg-[#8da85b]" aria-hidden="true" /><div className="min-w-0 flex-1"><h3 className="text-xs font-semibold text-[#3d4c41] dark:text-[#e0e7dc]">{notification.title}</h3><p className="mt-1 text-[11px] leading-relaxed text-[#737d70] dark:text-[#aeb9aa]">{notification.message}</p><p className="mt-1.5 text-[9px] text-[#92998e] dark:text-[#899789]">{notification.actor?.name || "Wareflow"} · {new Date(notification.createdAt).toLocaleString()}</p></div></div>
+          <div className="flex items-start gap-2"><span className="mt-0.5 size-2 shrink-0 rounded-full bg-[#8da85b]" aria-hidden="true" /><div className="min-w-0 flex-1"><h3 className="text-xs font-semibold text-[#3d4c41] dark:text-[#e0e7dc]">{notification.title}</h3><p className="mt-1 text-[11px] leading-relaxed text-[#737d70] dark:text-[#aeb9aa]">{notification.message}</p><p className="mt-1.5 text-[9px] text-[#92998e] dark:text-[#899789]">{notification.actor?.name || "Wareflow"} · {new Date(notification.createdAt).toLocaleString()}</p></div><button className="grid size-6 shrink-0 place-items-center rounded text-base leading-none text-[#78866a] hover:bg-[#eff0e9] disabled:opacity-40 dark:text-[#aab8a4] dark:hover:bg-[#303830]" type="button" aria-label={`Delete notification: ${notification.title}`} title="Delete notification" disabled={deletingIds.has(notification._id)} onClick={() => deleteNotification(notification._id)}>×</button></div>
         </article>) : <p className="px-4 py-8 text-center text-xs text-[#858e82] dark:text-[#a0ad9d]">No activity notifications yet.</p>}
       </div>
       {pagination.pages > 1 && <footer className="flex items-center justify-between border-t border-[#e9e9e0] px-4 py-2 text-[10px] text-[#858e82] dark:border-[#394339] dark:text-[#a0ad9d]">

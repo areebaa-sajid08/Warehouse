@@ -31,7 +31,7 @@ export async function publishActivityNotification({
       const now = new Date();
       await ActivityNotification.updateOne(
         { dedupeKey },
-        { $set: { ...notification, dedupeKey, readBy: [], createdAt: now, updatedAt: now } },
+        { $set: { ...notification, dedupeKey, readBy: [], dismissedBy: [], createdAt: now, updatedAt: now } },
         { upsert: true, timestamps: false },
       );
     } else {
